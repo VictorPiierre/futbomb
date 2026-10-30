@@ -10,9 +10,9 @@ que comece com a letra antes que ela exploda. Cada um tem 2 vidas; o último que
 
 ### 🛑 Stop (2 a 10 jogadores)
 Uma letra é sorteada e todos preenchem as categorias ao mesmo tempo. Quem completar tudo
-aperta **STOP** e a rodada acaba para todos. Na correção, as respostas que estão no dicionário
-entram como ✅ e as desconhecidas como ❓; a maioria dos outros jogadores pode virar qualquer uma.
-Resposta única vale 10, repetida vale 5. Vence quem somar mais pontos nas rodadas.
+aperta **STOP** e a rodada acaba para todos. Na correção, **quem decide são os jogadores** (como no
+StopotS): todos veem a mesma categoria por vez, toda resposta começa valendo e é anulada se a maioria
+der 👎; em branco ou com a letra errada não vale. Resposta única vale 10, repetida vale 5. Vence quem somar mais pontos nas rodadas.
 
 **Temas / categorias:** 🦁 Animais · 🧸 Objetos · 🍎 Comidas e frutas · 🎨 Cores · 🌎 Países · ⭐ Famosos ·
 💼 Profissões · 🙋 Nomes · 🏙️ Cidades · 🏷️ Marcas · 🎮 Jogos e brincadeiras · 🎬 Filmes ·

@@ -395,30 +395,26 @@ function StopPlay({ room, meId }: Props) {
   );
 }
 
-// ---------- revisão e votação ----------
-
-const STATUS: Record<StopAnswer['status'], { icon: string; label: string; cls: string }> = {
-  known: { icon: '✅', label: 'no dicionário', cls: 'text-ok' },
-  unknown: { icon: '❓', label: 'não encontrada — votem!', cls: 'text-spark' },
-  'wrong-letter': { icon: '⛔', label: 'letra errada', cls: 'text-danger' },
-  empty: { icon: '—', label: 'em branco', cls: 'text-muted' },
-};
+// ---------- correção (os jogadores decidem) ----------
 
 function StopReview({ room, meId }: Props) {
   const cats = room.settings.categories;
-  const [idx, setIdx] = useState(0);
-  const cat = cats[Math.min(idx, cats.length - 1)];
+  const cat = cats[Math.min(room.reviewIndex, cats.length - 1)];
   const list = room.answers?.[cat] ?? [];
   const remaining = useRemaining(room.reviewEndsAt);
   const me = room.players.find((p) => p.id === meId);
   const canVote = !!me && !me.left;
   const active = room.players.filter((p) => !p.left && p.connected);
   const readyCount = active.filter((p) => p.ready).length;
-  const name = (id: string) => room.players.find((p) => p.id === id);
+  const voters = (authorId: string) => active.filter((p) => p.id !== authorId).length;
+  const player = (id: string) => room.players.find((p) => p.id === id);
+  // Respostas iguais aparecem marcadas como repetidas (valem 5).
+  const counts = new Map<string, number>();
+  for (const a of list) if (a.status === 'ok') counts.set(normalize(a.text), (counts.get(normalize(a.text)) ?? 0) + 1);
 
-  function vote(a: StopAnswer, valid: boolean) {
-    const current = a.votes[meId];
-    socket.emit('stop:vote', { category: cat, playerId: a.playerId, valid: current === valid ? null : valid });
+  function toggle(a: StopAnswer) {
+    const against = a.against.includes(meId);
+    socket.emit('stop:vote', { category: cat, playerId: a.playerId, valid: against ? null : false });
   }
 
   return (
@@ -426,86 +422,71 @@ function StopReview({ room, meId }: Props) {
       <div className="mb-4 flex items-center gap-3">
         <LetterBadge letter={room.letter} size="sm" />
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold tracking-[0.2em] text-muted uppercase">Correção · rodada {room.round}</p>
-          <p className="font-display text-2xl">Vale ou não vale?</p>
+          <p className="text-xs font-semibold tracking-[0.2em] text-muted uppercase">
+            Correção · categoria {room.reviewIndex + 1} de {cats.length}
+          </p>
+          <p className="font-display text-2xl">
+            {THEMES[cat].icon} {THEMES[cat].label} com {room.letter}
+          </p>
         </div>
-        <span className="font-display text-2xl tabular-nums text-muted">{fmt(remaining)}</span>
+        <span className={`font-display text-3xl tabular-nums ${remaining < 6000 ? 'text-danger' : 'text-muted'}`}>{Math.ceil(remaining / 1000)}</span>
       </div>
 
-      <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
+      <div className="mb-3 flex gap-1">
         {cats.map((c, i) => (
-          <button key={c} onClick={() => setIdx(i)} className={`chip shrink-0 px-3 py-1.5 text-xs ${i === idx ? 'chip-on' : ''}`}>
-            {THEMES[c].icon} {THEMES[c].short}
-          </button>
+          <span key={c} className={`h-1.5 flex-1 rounded-full ${i < room.reviewIndex ? 'bg-ok' : i === room.reviewIndex ? 'bg-pop' : 'bg-panel-2'}`} />
         ))}
       </div>
 
-      <div className="glass rounded-3xl p-4 sm:p-5">
-        <h2 className="mb-3 font-display text-xl">
-          {THEMES[cat].icon} {THEMES[cat].label} com {room.letter}
-        </h2>
+      <div key={cat} className="glass slide-in rounded-3xl p-4 sm:p-5">
         <ul className="space-y-2">
           {list.map((a) => {
-            const p = name(a.playerId);
-            const st = STATUS[a.status];
-            const votable = canVote && a.playerId !== meId && (a.status === 'known' || a.status === 'unknown');
-            const yes = Object.values(a.votes).filter(Boolean).length;
-            const no = Object.values(a.votes).filter((v) => !v).length;
+            const p = player(a.playerId);
+            const mine = a.playerId === meId;
+            const votable = canVote && !mine && a.status === 'ok';
+            const iVoted = a.against.includes(meId);
+            const repeated = a.status === 'ok' && (counts.get(normalize(a.text)) ?? 0) > 1;
             return (
-              <li key={a.playerId} className={`slide-in flex flex-wrap items-center gap-3 rounded-2xl border-2 bg-panel-2/60 p-3 ${a.valid ? 'border-ok/50' : 'border-danger/40'}`}>
-                {p && <Avatar emoji={p.avatar} id={p.id} size={36} />}
+              <li key={a.playerId} className={`flex items-center gap-3 rounded-2xl border-2 bg-panel-2/60 p-3 transition-colors ${a.valid ? 'border-ok/50' : 'border-danger/40 opacity-80'}`}>
+                {p && <Avatar emoji={p.avatar} id={p.id} size={38} />}
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-muted">{p?.name}{a.playerId === meId && ' (você)'}</p>
-                  <p className={`truncate text-lg font-bold ${a.text ? '' : 'text-muted italic'}`}>{a.text || 'em branco'}</p>
-                  <p className={`text-xs ${st.cls}`}>
-                    {st.icon} {st.label}
-                    {a.canonical && normalize(a.canonical) !== normalize(a.text) && <span className="text-muted"> · {a.canonical}</span>}
+                  <p className="text-xs text-muted">{p?.name}{mine && ' (você)'}</p>
+                  <p className={`truncate text-lg font-bold ${a.valid ? '' : 'text-muted line-through'} ${a.text ? '' : 'italic'}`}>{a.text || 'em branco'}</p>
+                  <p className="text-xs">
+                    {a.status === 'empty' && <span className="text-muted">não respondeu</span>}
+                    {a.status === 'wrong-letter' && <span className="text-danger">não começa com {room.letter}</span>}
+                    {a.status === 'ok' && (
+                      <span className="text-muted">
+                        👎 {a.against.length}/{voters(a.playerId)} {repeated && <span className="text-spark">· repetida</span>}
+                      </span>
+                    )}
                   </p>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  {votable ? (
-                    <>
-                      <button
-                        onClick={() => vote(a, true)}
-                        className={`chip px-3 py-2 text-base ${a.votes[meId] === true ? 'border-ok/70 bg-ok/20' : ''}`}
-                        aria-label="Vale"
-                      >
-                        👍 <span className="text-xs tabular-nums">{yes}</span>
-                      </button>
-                      <button
-                        onClick={() => vote(a, false)}
-                        className={`chip px-3 py-2 text-base ${a.votes[meId] === false ? 'border-danger/70 bg-danger/20' : ''}`}
-                        aria-label="Não vale"
-                      >
-                        👎 <span className="text-xs tabular-nums">{no}</span>
-                      </button>
-                    </>
-                  ) : (
-                    (yes > 0 || no > 0) && <span className="text-xs text-muted">👍 {yes} · 👎 {no}</span>
-                  )}
-                  <span className={`ml-1 w-16 text-right text-xs font-bold ${a.valid ? 'text-ok' : 'text-danger'}`}>{a.valid ? 'VALE' : 'NÃO VALE'}</span>
-                </div>
+                {votable && (
+                  <button
+                    onClick={() => toggle(a)}
+                    className={`chip px-3 py-2 text-xl ${iVoted ? 'border-danger/70 bg-danger/20' : ''}`}
+                    aria-label={iVoted ? 'Retirar voto' : 'Não vale'}
+                    title={iVoted ? 'Retirar voto' : 'Não vale'}
+                  >
+                    👎
+                  </button>
+                )}
+                <span className={`w-20 text-right text-xs font-bold ${a.valid ? 'text-ok' : 'text-danger'}`}>{a.valid ? 'VALE' : 'NÃO VALE'}</span>
               </li>
             );
           })}
         </ul>
         <p className="mt-3 text-xs text-muted">
-          ✅ está no nosso dicionário · ❓ não encontramos. A maioria dos outros jogadores decide.
+          Toda resposta começa valendo. Dê 👎 nas que não valem — se a maioria votar contra, ela é anulada.
         </p>
       </div>
 
-      <div className="sticky bottom-3 mt-4 flex gap-2">
-        {idx < cats.length - 1 && (
-          <button onClick={() => setIdx(idx + 1)} className="btn-secondary flex-1 px-4">
-            Próxima categoria →
-          </button>
-        )}
-        {canVote && (
-          <button onClick={() => socket.emit('stop:ready')} className={`flex-1 ${me?.ready ? 'btn-secondary' : 'btn-primary'}`}>
-            {me?.ready ? `Pronto ✓ (${readyCount}/${active.length})` : `Terminei de corrigir (${readyCount}/${active.length})`}
-          </button>
-        )}
-      </div>
+      {canVote && (
+        <button onClick={() => socket.emit('stop:ready')} className={`sticky bottom-3 mt-4 w-full ${me?.ready ? 'btn-secondary' : 'btn-primary'}`}>
+          {me?.ready ? `Confirmado ✓ — esperando os outros (${readyCount}/${active.length})` : `Confirmar (${readyCount}/${active.length})`}
+        </button>
+      )}
     </div>
   );
 }

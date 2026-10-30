@@ -8,6 +8,8 @@ export const STOP_MAX_CATEGORIES = 12;
 export const STOP_DEFAULT_CATEGORIES: Theme[] = ['names', 'animals', 'foods', 'colors', 'objects', 'cities', 'brands', 'professions'];
 /** Contagem regressiva antes de liberar a digitação. */
 export const STOP_COUNTDOWN_MS = 3000;
+/** Tempo de correção de cada categoria. */
+export const STOP_REVIEW_MS = 25_000;
 
 export interface StopSettings {
   categories: Theme[];
@@ -31,15 +33,15 @@ export interface StopPlayer {
   ready: boolean;
 }
 
-export type StopAnswerStatus = 'empty' | 'wrong-letter' | 'known' | 'unknown';
+/** ok = vale até a maioria votar contra; empty/wrong-letter nunca valem. */
+export type StopAnswerStatus = 'ok' | 'empty' | 'wrong-letter';
 
 export interface StopAnswer {
   playerId: string;
   text: string;
   status: StopAnswerStatus;
-  canonical?: string;
-  /** voterId -> true (vale) | false (não vale) */
-  votes: Record<string, boolean>;
+  /** Quem votou que NÃO vale. */
+  against: string[];
   valid: boolean;
   /** Só existe depois da pontuação da rodada. */
   points?: number;
@@ -60,6 +62,8 @@ export interface StopPublicRoom {
   roundStartsAt: number | null;
   roundEndsAt: number | null;
   stoppedBy: string | null;
+  /** Categoria em correção agora (todos veem a mesma, uma por vez). */
+  reviewIndex: number;
   reviewEndsAt: number | null;
   /** Respostas por categoria — só aparecem na revisão e no placar da rodada. */
   answers: Partial<Record<Theme, StopAnswer[]>> | null;

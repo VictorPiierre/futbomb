@@ -2,12 +2,12 @@ import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import type { Server } from 'socket.io';
 import { normalize } from '../shared/normalize.ts';
 import {
-  STOP_COUNTDOWN_MS, STOP_DEFAULT_CATEGORIES, STOP_MAX_CATEGORIES, STOP_MAX_PLAYERS, STOP_MIN_CATEGORIES,
+  STOP_COUNTDOWN_MS, STOP_DEFAULT_CATEGORIES, STOP_REVIEW_MS, STOP_MAX_CATEGORIES, STOP_MAX_PLAYERS, STOP_MIN_CATEGORIES,
   STOP_ROUNDS, STOP_TIMES,
   type StopAnswer, type StopPhase, type StopPublicRoom, type StopSettings,
 } from '../shared/stop.ts';
 import { THEMES, type Theme } from '../shared/types.ts';
-import { NAME_INDEXES, recordRejected } from './names.ts';
+import { NAME_INDEXES } from './names.ts';
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const HARD_LETTERS = new Set(['K', 'W', 'X', 'Y', 'Z', 'Q', 'U']);
@@ -48,6 +48,7 @@ export class StopRoom {
   private roundEndsAt: number | null = null;
   private stoppedBy: string | null = null;
   private reviewEndsAt: number | null = null;
+  private reviewIndex = 0;
   private answers: Partial<Record<Theme, StopAnswer[]>> | null = null;
   private roundPoints: Record<string, number> | null = null;
   private ranking: StopPublicRoom['ranking'] = null;
@@ -298,48 +299,57 @@ export class StopRoom {
       answers[cat] = this.activePlayers().map((p) => {
         const text = (p.answers[cat] ?? '').trim();
         const key = normalize(text);
-        let status: StopAnswer['status'] = 'unknown';
-        let canonical: string | undefined;
-        if (!key) status = 'empty';
-        else if (key[0] !== letter) status = 'wrong-letter';
-        else {
-          const r = NAME_INDEXES[cat].lookup(text, new Set());
-          if (r.status !== 'unknown') {
-            status = 'known';
-            canonical = r.entity.name;
-          } else recordRejected(cat, text);
-        }
-        return { playerId: p.id, text, status, canonical, votes: {}, valid: status === 'known' };
+        // Como no StopotS: quem decide são os jogadores. Tudo começa valendo,
+        // exceto em branco ou com a letra errada.
+        const status: StopAnswer['status'] = !key ? 'empty' : key[0] !== letter ? 'wrong-letter' : 'ok';
+        return { playerId: p.id, text, status, against: [], valid: status === 'ok' };
       });
     }
     this.answers = answers;
     this.phase = 'review';
+    this.reviewIndex = 0;
+    this.startCategoryReview();
+  }
+
+  /** Todos corrigem a mesma categoria; passa quando todos confirmam ou o tempo acaba. */
+  private startCategoryReview() {
+    clearTimeout(this.timer);
     for (const m of this.members) m.ready = false;
-    const ms = Math.min(150_000, 20_000 + this.settings.categories.length * 8_000);
-    this.reviewEndsAt = Date.now() + ms;
-    this.timer = setTimeout(() => this.score(), ms);
+    this.reviewEndsAt = Date.now() + STOP_REVIEW_MS;
+    this.timer = setTimeout(() => this.nextCategory(), STOP_REVIEW_MS);
     this.broadcast();
   }
 
+  private nextCategory() {
+    if (this.phase !== 'review') return;
+    this.reviewIndex++;
+    if (this.reviewIndex >= this.settings.categories.length) this.score();
+    else this.startCategoryReview();
+  }
+
+  /** valid=false: "não vale" (👎); valid=null/true: retira o voto. */
   vote(by: string, payload: { category?: unknown; playerId?: unknown; valid?: unknown }) {
     if (this.phase !== 'review' || !this.answers) return;
     const voter = this.find(by);
     if (!voter || voter.role !== 'player' || voter.left) return;
-    const list = this.answers[String(payload?.category) as Theme];
-    const a = list?.find((x) => x.playerId === payload?.playerId);
-    if (!a || a.playerId === by || a.status === 'empty' || a.status === 'wrong-letter') return;
-    if (typeof payload.valid === 'boolean') a.votes[by] = payload.valid;
-    else delete a.votes[by];
+    const cat = String(payload?.category) as Theme;
+    if (cat !== this.settings.categories[this.reviewIndex]) return; // só a categoria em correção
+    const a = this.answers[cat]?.find((x) => x.playerId === payload?.playerId);
+    if (!a || a.playerId === by || a.status !== 'ok') return;
+    a.against = a.against.filter((id) => id !== by);
+    if (payload.valid === false) a.against.push(by);
     this.recompute(a);
     this.broadcast();
   }
 
-  /** Começa pelo resultado do dicionário; a maioria dos outros jogadores pode virar. */
+  /** Não vale quando a maioria dos outros jogadores votou contra. */
   private recompute(a: StopAnswer) {
-    const base = a.status === 'known';
+    if (a.status !== 'ok') {
+      a.valid = false;
+      return;
+    }
     const voters = this.activePlayers().filter((p) => p.id !== a.playerId && p.connected).length;
-    const against = Object.values(a.votes).filter((v) => v !== base).length;
-    a.valid = voters > 0 && against > voters / 2 ? !base : base;
+    a.valid = !(voters > 0 && a.against.length > voters / 2);
   }
 
   ready(by: string) {
@@ -353,7 +363,7 @@ export class StopRoom {
   private checkReady() {
     if (this.phase !== 'review') return;
     const voters = this.activePlayers().filter((p) => p.connected);
-    if (voters.length && voters.every((p) => p.ready)) this.score();
+    if (voters.length && voters.every((p) => p.ready)) this.nextCategory();
   }
 
   private score() {
@@ -368,7 +378,7 @@ export class StopRoom {
           a.points = 0;
           continue;
         }
-        const key = normalize(a.canonical ?? a.text);
+        const key = normalize(a.text);
         groups.set(key, [...(groups.get(key) ?? []), a]);
       }
       for (const g of groups.values()) for (const a of g) a.points = g.length === 1 ? 10 : 5;
@@ -441,6 +451,7 @@ export class StopRoom {
       roundStartsAt: this.roundStartsAt,
       roundEndsAt: this.roundEndsAt,
       stoppedBy: this.stoppedBy,
+      reviewIndex: this.reviewIndex,
       reviewEndsAt: this.reviewEndsAt,
       answers: showAnswers ? this.answers : null,
       roundPoints: this.phase === 'scores' ? this.roundPoints : null,

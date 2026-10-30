@@ -83,21 +83,31 @@ for (let round = 1; round <= 3; round++) {
   const caioColor = ans.colors!.find((x) => x.playerId === c.id)!;
   check(caioColor.status === 'empty' && !caioColor.valid, 'resposta em branco não vale');
   const betoFood = ans.foods!.find((x) => x.playerId === b.id)!;
-  check(betoFood.status === 'unknown' && !betoFood.valid, 'palavra inventada começa inválida');
+  check(betoFood.status === 'ok' && betoFood.valid, 'palavra inventada começa valendo (quem decide são os jogadores)');
+  check(a.state!.reviewIndex === 0, 'correção começa pela primeira categoria, igual para todos');
 
-  if (round === 1) {
-    // Ana e Caio votam que a palavra inventada do Beto vale: maioria (2 de 2) vira.
-    a.socket.emit('stop:vote', { category: 'foods', playerId: b.id, valid: true });
-    c.socket.emit('stop:vote', { category: 'foods', playerId: b.id, valid: true });
-    await waitFor(() => !!a.state?.answers?.foods?.find((x) => x.playerId === b.id)?.valid);
-    check(true, 'votação da maioria aceita a resposta');
-    const self = a.state!.answers!.animals!.find((x) => x.playerId === a.id)!;
-    a.socket.emit('stop:vote', { category: 'animals', playerId: a.id, valid: false });
-    await sleep(200);
-    check(Object.keys(a.state!.answers!.animals!.find((x) => x.playerId === a.id)!.votes).length === Object.keys(self.votes).length, 'ninguém vota na própria resposta');
+  // Uma categoria por vez: todos confirmam para avançar.
+  for (let i = 0; i < CATS.length; i++) {
+    await waitFor(() => a.state?.reviewIndex === i);
+    if (round === 1 && i === 0) {
+      a.socket.emit('stop:vote', { category: 'foods', playerId: b.id, valid: false });
+      await sleep(200);
+      check(a.state!.answers!.foods!.find((x) => x.playerId === b.id)!.against.length === 0, 'voto em categoria que não está em correção é ignorado');
+      a.socket.emit('stop:vote', { category: 'animals', playerId: a.id, valid: false });
+      await sleep(200);
+      check(a.state!.answers!.animals!.find((x) => x.playerId === a.id)!.against.length === 0, 'ninguém vota na própria resposta');
+    }
+    if (round === 1 && CATS[i] === 'foods') {
+      a.socket.emit('stop:vote', { category: 'foods', playerId: b.id, valid: false });
+      await waitFor(() => a.state!.answers!.foods!.find((x) => x.playerId === b.id)!.against.length === 1);
+      check(a.state!.answers!.foods!.find((x) => x.playerId === b.id)!.valid, '1 voto contra de 2 ainda não anula');
+      c.socket.emit('stop:vote', { category: 'foods', playerId: b.id, valid: false });
+      await waitFor(() => a.state!.answers!.foods!.find((x) => x.playerId === b.id)!.valid === false);
+      check(true, 'maioria votou contra: resposta anulada');
+    }
+    for (const cl of [a, b, c]) cl.socket.emit('stop:ready');
+    if (i < CATS.length - 1) await waitFor(() => a.state?.reviewIndex === i + 1 || a.state?.phase !== 'review');
   }
-
-  for (const cl of [a, b, c]) cl.socket.emit('stop:ready');
   await waitFor(() => a.state?.phase === 'scores' || a.state?.phase === 'ended');
   if (a.state!.phase === 'scores') {
     const animals = a.state!.answers!.animals!;
