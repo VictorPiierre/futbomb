@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import type { Server } from 'socket.io';
 import { normalize } from '../shared/normalize.ts';
 import {
@@ -38,8 +38,8 @@ interface GameState {
   lastTheme: Theme | null;
   letter: string;
   lastLetter: string;
-  /** Letras já sorteadas na partida: só repetem depois de passar por todas as possíveis. */
-  usedLetters: Set<string>;
+  /** Quem abriu a volta atual: a próxima volta começa com o jogador seguinte. */
+  lapStarter: string;
   round: number;
   queue: string[];
   currentId: string | null;
@@ -61,6 +61,10 @@ export class Room {
   game: GameState | null = null;
   winnerId: string | null = null;
   ranking: PublicRoom['ranking'] = null;
+  /** Letras já sorteadas nesta sala (vale entre partidas): só repetem depois de passar por todas. */
+  private usedLetters = new Set<string>();
+  private recentLetters: string[] = [];
+  private lastGameStarter = '';
   lastActivity = Date.now();
 
   constructor(code: string, private io: Server, private onEmpty: (room: Room) => void) {
@@ -213,11 +217,14 @@ export class Room {
     this.ranking = null;
     this.game = {
       theme: 'players', lastTheme: null,
-      letter: '', lastLetter: '', usedLetters: new Set(), round: 0, queue: [], currentId: null, status: 'turn',
+      letter: '', lastLetter: '', lapStarter: '', round: 0, queue: [], currentId: null, status: 'turn',
       turnEndsAt: null, used: new Set(), history: [], historySeq: 0, eliminatedCount: 0,
     };
     this.fx({ type: 'start' });
-    const first = players[Math.floor(Math.random() * players.length)];
+    // Quem começa é sorteado, mas nunca o mesmo da partida anterior.
+    const candidates = players.length > 1 ? players.filter((p) => p.id !== this.lastGameStarter) : players;
+    const first = candidates[randomInt(candidates.length)];
+    this.lastGameStarter = first.id;
     this.startLap(first.id);
     return null;
   }
@@ -227,6 +234,7 @@ export class Room {
     const active = this.activePlayers();
     const idx = Math.max(0, active.findIndex((p) => p.id === startId));
     g.queue = [...active.slice(idx), ...active.slice(0, idx)].map((p) => p.id);
+    g.lapStarter = g.queue[0];
     g.round++;
     g.lastLetter = g.letter;
     g.lastTheme = g.round > 1 ? g.theme : null;
@@ -242,30 +250,33 @@ export class Room {
     const g = this.game!;
     const playable = THEME_IDS.filter((t) => t !== g.lastTheme && !ADULT_THEMES.includes(t) && this.eligibleLetters(t, activeCount).length > 0);
     const pool = playable.length ? playable : THEME_IDS.filter((t) => !ADULT_THEMES.includes(t));
-    return pool[Math.floor(Math.random() * pool.length)];
+    return pool[randomInt(pool.length)];
   }
 
   private eligibleLetters(theme: Theme, activeCount: number) {
     const index = NAME_INDEXES[theme];
     return LETTERS.map((l) => ({ l, n: index.available(l, this.game!.used) })).filter(
-      ({ l, n }) => n >= activeCount * (HARD_LETTERS.has(l) ? 6 : 2),
+      // Basta ter respostas para a volta inteira (letras difíceis precisam de folga maior).
+      ({ l, n }) => n >= (HARD_LETTERS.has(l) ? activeCount * 3 : activeCount + 1),
     );
   }
 
   private drawLetter(theme: Theme, activeCount: number): string {
-    const g = this.game!;
     const index = NAME_INDEXES[theme];
-    const counts = LETTERS.map((l) => ({ l, n: index.available(l, g.used) }));
+    const counts = LETTERS.map((l) => ({ l, n: index.available(l, this.game!.used) }));
     const eligible = this.eligibleLetters(theme, activeCount);
-    let fresh = eligible.filter(({ l }) => !g.usedLetters.has(l));
+    // Evita as últimas letras sorteadas, mesmo quando o ciclo recomeça.
+    const recent = new Set(this.recentLetters.slice(-Math.min(4, Math.max(0, eligible.length - 1))));
+    let fresh = eligible.filter(({ l }) => !this.usedLetters.has(l) && !recent.has(l));
     if (!fresh.length && eligible.length) {
-      // Todas as letras possíveis já saíram: recomeça o ciclo (sem repetir a última).
-      g.usedLetters.clear();
-      fresh = eligible.filter(({ l }) => l !== g.lastLetter);
+      // Todas as letras possíveis já saíram: recomeça o ciclo.
+      this.usedLetters.clear();
+      fresh = eligible.filter(({ l }) => !recent.has(l));
     }
     const pool = fresh.length ? fresh : eligible.length ? eligible : [counts.sort((a, b) => b.n - a.n)[0]];
-    const letter = pool[Math.floor(Math.random() * pool.length)].l;
-    g.usedLetters.add(letter);
+    const letter = pool[randomInt(pool.length)].l;
+    this.usedLetters.add(letter);
+    this.recentLetters = [...this.recentLetters, letter].slice(-8);
     return letter;
   }
 
@@ -287,9 +298,9 @@ export class Room {
     if (this.activePlayers().length <= 1) return this.finish();
     g.queue = g.queue.filter((id) => this.activePlayers().some((p) => p.id === id));
     if (g.queue.length) return this.beginTurn(g.queue.shift()!);
-    // Volta completa: nova letra, começando pelo próximo da roda.
+    // Volta completa: nova letra, e quem abre é o jogador seguinte a quem abriu a volta anterior.
     const seats = this.players;
-    const curIdx = seats.findIndex((p) => p.id === g.currentId);
+    const curIdx = seats.findIndex((p) => p.id === g.lapStarter);
     for (let step = 1; step <= seats.length; step++) {
       const p = seats[(curIdx + step) % seats.length];
       if (!p.eliminated) return this.startLap(p.id);
