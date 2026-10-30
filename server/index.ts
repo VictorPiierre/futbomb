@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server, type Socket } from 'socket.io';
 import { AVATARS, type JoinResult, type Settings } from '../shared/types.ts';
-import { NAME_INDEXES } from './names.ts';
+import { NAME_INDEXES, rejectedList } from './names.ts';
 import { Room } from './room.ts';
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -22,9 +22,13 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     rooms: rooms.size,
-    players: NAME_INDEXES.players.entities.length,
-    clubs: NAME_INDEXES.clubs.entities.length,
+    words: Object.fromEntries(Object.entries(NAME_INDEXES).map(([t, idx]) => [t, idx.entities.length])),
   });
+});
+
+// Palavras que os jogadores tentaram e não estavam no banco (some ao reiniciar o servidor).
+app.get('/api/recusadas', (_req, res) => {
+  res.json(rejectedList());
 });
 
 if (fs.existsSync(CLIENT_DIST)) {
@@ -174,6 +178,6 @@ setInterval(() => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`⚽💣 FutBomb rodando em http://localhost:${PORT}`);
-  console.log(`   Banco: ${NAME_INDEXES.players.entities.length} jogadores, ${NAME_INDEXES.clubs.entities.length} clubes`);
+  console.log(`   Banco: ${Object.entries(NAME_INDEXES).map(([t, idx]) => `${t} ${idx.entities.length}`).join(', ')}`);
   if (!fs.existsSync(CLIENT_DIST)) console.log('   (modo dev: abra o front-end em http://localhost:5173)');
 });

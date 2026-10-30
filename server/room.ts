@@ -5,7 +5,7 @@ import {
   START_LIVES, MAX_PLAYERS, TURN_TIMES, THEMES, THEME_IDS, type Theme,
   type AnswerResult, type GameFx, type HistoryItem, type PublicRoom, type Settings,
 } from '../shared/types.ts';
-import { NAME_INDEXES } from './names.ts';
+import { NAME_INDEXES, recordRejected } from './names.ts';
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const HARD_LETTERS = new Set(['K', 'W', 'X', 'Y', 'Z', 'Q', 'U']);
@@ -38,6 +38,8 @@ interface GameState {
   lastTheme: Theme | null;
   letter: string;
   lastLetter: string;
+  /** Letras já sorteadas na partida: só repetem depois de passar por todas as possíveis. */
+  usedLetters: Set<string>;
   round: number;
   queue: string[];
   currentId: string | null;
@@ -211,7 +213,7 @@ export class Room {
     this.ranking = null;
     this.game = {
       theme: 'players', lastTheme: null,
-      letter: '', lastLetter: '', round: 0, queue: [], currentId: null, status: 'turn',
+      letter: '', lastLetter: '', usedLetters: new Set(), round: 0, queue: [], currentId: null, status: 'turn',
       turnEndsAt: null, used: new Set(), history: [], historySeq: 0, eliminatedCount: 0,
     };
     this.fx({ type: 'start' });
@@ -255,9 +257,16 @@ export class Room {
     const index = NAME_INDEXES[theme];
     const counts = LETTERS.map((l) => ({ l, n: index.available(l, g.used) }));
     const eligible = this.eligibleLetters(theme, activeCount);
-    const fresh = eligible.filter(({ l }) => l !== g.lastLetter);
+    let fresh = eligible.filter(({ l }) => !g.usedLetters.has(l));
+    if (!fresh.length && eligible.length) {
+      // Todas as letras possíveis já saíram: recomeça o ciclo (sem repetir a última).
+      g.usedLetters.clear();
+      fresh = eligible.filter(({ l }) => l !== g.lastLetter);
+    }
     const pool = fresh.length ? fresh : eligible.length ? eligible : [counts.sort((a, b) => b.n - a.n)[0]];
-    return pool[Math.floor(Math.random() * pool.length)].l;
+    const letter = pool[Math.floor(Math.random() * pool.length)].l;
+    g.usedLetters.add(letter);
+    return letter;
   }
 
   private beginTurn(playerId: string) {
@@ -340,6 +349,7 @@ export class Room {
     if (key[0].toUpperCase() !== g.letter) return { ok: false, reason: `Precisa começar com a letra ${g.letter}.` };
 
     const result = NAME_INDEXES[g.theme].lookup(text, g.used);
+    if (result.status === 'unknown') recordRejected(g.theme, text);
     if (result.status === 'unknown') return { ok: false, reason: `"${text}" não foi reconhecido como ${kind}. Tente outro!` };
     if (result.status === 'used') return { ok: false, reason: `${result.entity.name} já foi usado nesta partida.` };
 

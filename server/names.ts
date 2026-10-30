@@ -163,3 +163,18 @@ function pick(list: Entity[], used: Set<string>): LookupResult {
 export const NAME_INDEXES = Object.fromEntries(
   THEME_IDS.map((t) => [t, new NameIndex(path.join(DATA_DIR, `${t}.json`), t)]),
 ) as Record<Theme, NameIndex>;
+
+// Palavras recusadas, para revisar e ampliar o banco (GET /api/recusadas).
+const rejected = new Map<string, { theme: Theme; word: string; count: number }>();
+
+export function recordRejected(theme: Theme, text: string) {
+  const key = `${theme}:${normalize(text)}`;
+  const entry = rejected.get(key);
+  if (entry) entry.count++;
+  else if (rejected.size < 2000) rejected.set(key, { theme, word: text.trim(), count: 1 });
+  console.log(`[recusada] ${THEMES[theme].short}: ${text.trim()}`);
+}
+
+export function rejectedList() {
+  return [...rejected.values()].sort((a, b) => b.count - a.count);
+}

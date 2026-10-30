@@ -114,6 +114,10 @@ npm run import -- animais meus-animais.csv
 Veja `data/exemplo-importacao.csv`. Nomes repetidos são mesclados (os apelidos novos são somados).
 Use `--substituir` para trocar o banco inteiro. Reinicie o servidor depois de importar.
 
+Palavras que os jogadores tentaram e não estavam no banco ficam listadas em `/api/recusadas`
+(ex.: https://futbomb.onrender.com/api/recusadas) — use para descobrir o que falta cadastrar.
+A lista é zerada quando o servidor reinicia.
+
 ## Regras implementadas
 
 - Sala com código de 4 letras e link `/s/CODIGO`; anfitrião escolhe tema (ou Surpresa), tempo (5–30 s) e máximo de jogadores (2–4).
