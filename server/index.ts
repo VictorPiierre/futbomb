@@ -4,9 +4,10 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Server, type Socket } from 'socket.io';
-import { AVATARS, type JoinResult, type Settings } from '../shared/types.ts';
+import { AVATARS, type JoinResult } from '../shared/types.ts';
 import { NAME_INDEXES, rejectedList } from './names.ts';
 import { Room } from './room.ts';
+import { StopRoom } from './stop-room.ts';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -16,7 +17,8 @@ const ROOM_TTL_MS = 30 * 60_000;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: true }, pingInterval: 10_000, pingTimeout: 8_000 });
-const rooms = new Map<string, Room>();
+type AnyRoom = Room | StopRoom;
+const rooms = new Map<string, AnyRoom>();
 
 app.get('/api/health', (_req, res) => {
   res.json({
@@ -53,7 +55,7 @@ function cleanAvatar(raw: unknown) {
   return AVATARS.includes(String(raw)) ? String(raw) : AVATARS[0];
 }
 
-function removeRoom(room: Room) {
+function removeRoom(room: AnyRoom) {
   room.destroy();
   rooms.delete(room.code);
 }
@@ -69,7 +71,7 @@ function current(socket: Socket) {
   return { room, memberId: data.memberId ?? '' };
 }
 
-function attach(socket: Socket, room: Room, memberId: string) {
+function attach(socket: Socket, room: AnyRoom, memberId: string) {
   const prev = current(socket);
   if (prev.room && prev.room !== room) {
     prev.room.leave(prev.memberId);
@@ -80,10 +82,10 @@ function attach(socket: Socket, room: Room, memberId: string) {
 }
 
 io.on('connection', (socket) => {
-  socket.on('room:create', (payload: { name?: string; avatar?: string }, ack?: (r: JoinResult) => void) => {
+  socket.on('room:create', (payload: { name?: string; avatar?: string; game?: string }, ack?: (r: JoinResult) => void) => {
     const name = cleanName(payload?.name);
     if (!name) return ack?.({ ok: false, error: 'Escolha um apelido.' });
-    const room = new Room(newCode(), io, removeRoom);
+    const room = payload?.game === 'stop' ? new StopRoom(newCode(), io, removeRoom) : new Room(newCode(), io, removeRoom);
     rooms.set(room.code, room);
     const m = room.addMember(name, cleanAvatar(payload?.avatar), socket.id);
     if (typeof m === 'string') return ack?.({ ok: false, error: m });
@@ -103,7 +105,7 @@ io.on('connection', (socket) => {
       const existing = payload?.token ? room.findByToken(String(payload.token)) : undefined;
       if (existing) {
         if (existing.socketId && existing.socketId !== socket.id) io.sockets.sockets.get(existing.socketId)?.disconnect();
-        room.reconnect(existing, socket.id);
+        room.reconnect(existing as never, socket.id);
         attach(socket, room, existing.id);
         ack?.({ ok: true, code, memberId: existing.id, token: existing.token });
         return room.broadcast();
@@ -127,9 +129,9 @@ io.on('connection', (socket) => {
     room.leave(memberId);
   });
 
-  socket.on('room:settings', (patch: Partial<Settings>) => {
+  socket.on('room:settings', (patch: object) => {
     const { room, memberId } = current(socket);
-    room?.updateSettings(memberId, patch ?? {});
+    room?.updateSettings(memberId, (patch ?? {}) as never);
   });
 
   socket.on('room:seat', (take: boolean) => {
@@ -152,12 +154,39 @@ io.on('connection', (socket) => {
 
   socket.on('game:answer', (text: string, ack?: (r: unknown) => void) => {
     const { room, memberId } = current(socket);
-    ack?.(room ? room.answer(memberId, text) : { ok: false, reason: 'Sala não encontrada.' });
+    ack?.(room instanceof Room ? room.answer(memberId, text) : { ok: false, reason: 'Sala não encontrada.' });
   });
 
   socket.on('game:typing', (text: string) => {
     const { room, memberId } = current(socket);
-    room?.typing(memberId, text);
+    if (room instanceof Room) room.typing(memberId, text);
+  });
+
+  // ---------- Stop ----------
+  const stopRoom = () => {
+    const { room, memberId } = current(socket);
+    return { room: room instanceof StopRoom ? room : undefined, memberId };
+  };
+  socket.on('stop:answer', (payload: { category?: string; text?: string }) => {
+    const { room, memberId } = stopRoom();
+    room?.answer(memberId, payload);
+  });
+  socket.on('stop:stop', (answers: unknown, ack?: (r: { ok: boolean; error?: string }) => void) => {
+    const { room, memberId } = stopRoom();
+    const error = room ? room.stop(memberId, answers) : 'Sala não encontrada.';
+    ack?.({ ok: !error, error: error ?? undefined });
+  });
+  socket.on('stop:vote', (payload: { category?: string; playerId?: string; valid?: boolean | null }) => {
+    const { room, memberId } = stopRoom();
+    room?.vote(memberId, payload ?? {});
+  });
+  socket.on('stop:ready', () => {
+    const { room, memberId } = stopRoom();
+    room?.ready(memberId);
+  });
+  socket.on('stop:next', () => {
+    const { room, memberId } = stopRoom();
+    room?.next(memberId);
   });
 
   socket.on('disconnect', () => {

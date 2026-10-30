@@ -442,6 +442,7 @@ export class Room {
     const g = this.game;
     const host = this.find(this.hostId);
     return {
+      kind: 'pavio',
       code: this.code,
       hostId: this.hostId,
       hostName: host?.name ?? '',

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { JoinResult, PublicRoom } from '../../shared/types';
+import type { StopPublicRoom } from '../../shared/stop';
+import type { GameKind, JoinResult, PublicRoom } from '../../shared/types';
 import Home from './components/Home';
 import RoomView from './components/RoomView';
 import { codeFromPath, emitAck, loadProfile, loadSession, saveProfile, saveSession, socket, syncClock, useSocketEvent } from './net';
 
 export default function App() {
-  const [room, setRoom] = useState<PublicRoom | null>(null);
+  const [room, setRoom] = useState<PublicRoom | StopPublicRoom | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
   const [connected, setConnected] = useState(socket.connected);
   const [error, setError] = useState('');
@@ -15,7 +16,7 @@ export default function App() {
     return !!s && s.code === codeFromPath();
   });
 
-  useSocketEvent<PublicRoom>('room:state', (state) => {
+  useSocketEvent<PublicRoom | StopPublicRoom>('room:state', (state) => {
     syncClock(state.serverNow);
     setRoom(state);
   });
@@ -66,10 +67,10 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop);
   });
 
-  async function create(name: string, avatar: string) {
+  async function create(name: string, avatar: string, game: GameKind) {
     saveProfile({ name, avatar });
     setBusy(true);
-    enter(await emitAck<JoinResult>('room:create', { name, avatar }));
+    enter(await emitAck<JoinResult>('room:create', { name, avatar, game }));
     setBusy(false);
   }
 

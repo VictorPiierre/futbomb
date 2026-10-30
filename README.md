@@ -1,16 +1,27 @@
-# 💣 Pavio Curto
+# 🎲 Jogatina
 
-Jogo multiplayer em tempo real (2 a 4 jogadores). Uma letra é sorteada e, na sua vez,
-você precisa digitar uma palavra do tema que comece com ela antes que a bomba exploda.
+Site de jogos de palavras multiplayer em tempo real, para jogar com os amigos pelo link da sala.
 
-Temas: ⚽ Jogadores de futebol · 🛡️ Clubes · 🦁 Animais · 🧸 Objetos · 🍎 Comidas e frutas ·
-🎨 Cores · 🌎 Países · ⭐ Famosos · 💼 Profissões · 🙋 Nomes · 🏙️ Cidades · 🏷️ Marcas ·
-🎮 Jogos e brincadeiras · 🎬 Filmes · 📺 Séries, novelas e desenhos · 🏅 Esportes · 🫀 Partes do corpo ·
-🤬 Xingamentos (tema adulto, só quando escolhido) · 🎲 **Surpresa** (o tema muda a cada volta).
+## Jogos
+
+### 💣 Pavio Curto (2 a 4 jogadores)
+Uma letra é sorteada e a bomba passa de mão em mão: na sua vez, digite uma palavra do tema
+que comece com a letra antes que ela exploda. Cada um tem 2 vidas; o último que sobrar vence.
+
+### 🛑 Stop (2 a 10 jogadores)
+Uma letra é sorteada e todos preenchem as categorias ao mesmo tempo. Quem completar tudo
+aperta **STOP** e a rodada acaba para todos. Na correção, as respostas que estão no dicionário
+entram como ✅ e as desconhecidas como ❓; a maioria dos outros jogadores pode virar qualquer uma.
+Resposta única vale 10, repetida vale 5. Vence quem somar mais pontos nas rodadas.
+
+**Temas / categorias:** 🦁 Animais · 🧸 Objetos · 🍎 Comidas e frutas · 🎨 Cores · 🌎 Países · ⭐ Famosos ·
+💼 Profissões · 🙋 Nomes · 🏙️ Cidades · 🏷️ Marcas · 🎮 Jogos e brincadeiras · 🎬 Filmes ·
+📺 Séries, novelas e desenhos · 🏅 Esportes · 🫀 Partes do corpo · ⚽ Jogadores · 🛡️ Clubes ·
+🤬 Xingamentos (adulto) · 🎲 Surpresa (Pavio Curto: o tema muda a cada volta).
 
 - Front-end: React + Vite + TypeScript + Tailwind CSS
-- Back-end: Node.js + Express + Socket.IO (cronômetro, turnos, vidas e validação **no servidor**)
-- Banco de palavras: um arquivo por tema em `data/` (~6.000 entradas no total)
+- Back-end: Node.js + Express + Socket.IO (cronômetro, turnos, votação e validação **no servidor**)
+- Banco de palavras: `data/<tema>.json` (curado) + `data/extra/<tema>.json` (importado de bases públicas)
 
 ## Rodar localmente
 
@@ -46,6 +57,12 @@ Há também um teste automático que conecta 3 clientes reais ao servidor:
 
 ```bash
 npm run smoke
+```
+
+E o teste do Stop:
+
+```bash
+npm run smoke:stop
 ```
 
 (com o servidor rodando em outro terminal via `npm start`).
@@ -88,6 +105,28 @@ Os links de convite usarão o domínio da Vercel (`https://seu-app.vercel.app/s/
 Variável do servidor: `PORT` (padrão 3000).
 
 ## Banco de palavras
+
+São duas camadas por tema:
+
+- **`data/<tema>.json`** — banco principal, curado à mão. É o que decide quais letras podem ser sorteadas.
+- **`data/extra/<tema>.json`** — listas grandes só para *reconhecer* respostas (≈150 mil entradas):
+  - nomes do Censo/IBGE (via brasil.io, ~100 mil nomes);
+  - todos os municípios do IBGE + cidades do mundo (Wikidata);
+  - famosos, filmes, séries, jogos, marcas, jogadores e clubes (Wikidata, CC0);
+  - animais, comidas, objetos, profissões, partes do corpo, cores e esportes (Wiktionary via kaikki.org).
+
+Para atualizar as listas extra:
+
+```bash
+npm run fetch:wikidata
+```
+
+```bash
+npm run build:extra -- <pasta com nomes.csv.gz, municipios.json e kaikki-pt.jsonl>
+```
+
+(os links de download de cada arquivo estão no topo de `scripts/build-extra.ts`).
+
 
 Cada tema tem seu arquivo em `data/`: `players`, `clubs`, `animals`, `objects`, `foods`,
 `colors`, `countries`, `famous`, `professions`, `names`, `cities`, `brands`, `games`,

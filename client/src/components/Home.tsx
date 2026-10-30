@@ -1,6 +1,11 @@
 import { useState, type FormEvent } from 'react';
-import { AVATARS } from '../../../shared/types';
-import { BombMark, Logo } from './Icons';
+import { AVATARS, type GameKind } from '../../../shared/types';
+import { BombMark, Logo, StopMark } from './Icons';
+
+const GAMES: { id: GameKind; name: string; text: string; players: string }[] = [
+  { id: 'pavio', name: 'Pavio Curto', text: 'A bomba passa de mão em mão: diga uma palavra do tema antes que ela exploda.', players: '2 a 4 jogadores' },
+  { id: 'stop', name: 'Stop', text: 'Todos preenchem as categorias com a mesma letra. Quem terminar grita STOP!', players: '2 a 10 jogadores' },
+];
 
 interface Props {
   initialCode: string;
@@ -8,7 +13,7 @@ interface Props {
   error: string;
   busy: boolean;
   connected: boolean;
-  onCreate: (name: string, avatar: string) => void;
+  onCreate: (name: string, avatar: string, game: GameKind) => void;
   onJoin: (code: string, name: string, avatar: string) => void;
 }
 
@@ -16,6 +21,8 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
   const [name, setName] = useState(profile.name);
   const [avatar, setAvatar] = useState(profile.avatar);
   const [code, setCode] = useState(initialCode);
+  const [game, setGame] = useState<GameKind>('pavio');
+  const gameName = GAMES.find((g) => g.id === game)!.name;
   const [localError, setLocalError] = useState('');
   const invited = initialCode.length === 4;
 
@@ -40,10 +47,32 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
       <div className="pop-in w-full max-w-md">
-        <div className="mb-8 flex flex-col items-center text-center">
-          <Logo size="lg" />
-          <p className="mt-3 text-muted">A bomba está com você! Diga um animal, uma cor, um filme, um famoso… antes que o pavio acabe.</p>
+        <div className="mb-6 flex flex-col items-center text-center">
+          <Logo size="lg" game="hub" />
+          <p className="mt-3 text-muted">Jogos de palavras para jogar com os amigos, em tempo real.</p>
         </div>
+
+        {!invited && (
+          <div className="mb-4 grid grid-cols-2 gap-3">
+            {GAMES.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => setGame(g.id)}
+                className={`flex cursor-pointer flex-col items-center gap-1.5 rounded-2xl border-2 p-3 text-center transition sm:p-4 ${
+                  game === g.id
+                    ? g.id === 'stop' ? 'border-pop bg-pop/10' : 'border-fire bg-fire/10'
+                    : 'border-line bg-panel/60 hover:border-line hover:bg-panel'
+                }`}
+              >
+                {g.id === 'stop' ? <StopMark className="h-12 w-12" /> : <BombMark className="h-12 w-12" />}
+                <span className={`font-display text-xl ${g.id === 'stop' ? 'text-pop' : 'text-fire'}`}>{g.name}</span>
+                <span className="text-xs leading-snug text-muted">{g.text}</span>
+                <span className="text-[11px] font-semibold text-muted/80">{g.players}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <form onSubmit={submitJoin} className="glass rounded-3xl p-5 shadow-2xl shadow-black/40 sm:p-6">
           <label className="mb-1.5 block text-xs font-semibold tracking-wider text-muted uppercase">Seu apelido</label>
@@ -83,7 +112,7 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
               <button
                 type="button"
                 disabled={busy || !connected}
-                onClick={() => validName() && onCreate(name.trim(), avatar)}
+                onClick={() => validName() && onCreate(name.trim(), avatar, game)}
                 className="mt-3 w-full text-sm text-muted underline-offset-4 hover:text-white hover:underline"
               >
                 ou criar uma sala nova
@@ -94,10 +123,10 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
               <button
                 type="button"
                 disabled={busy || !connected}
-                onClick={() => validName() && onCreate(name.trim(), avatar)}
+                onClick={() => validName() && onCreate(name.trim(), avatar, game)}
                 className="btn-primary mt-6 w-full"
               >
-                Criar sala
+                Criar sala de {gameName}
               </button>
               <div className="my-5 flex items-center gap-3 text-xs text-muted uppercase">
                 <span className="h-px flex-1 bg-line" /> ou entre com um código <span className="h-px flex-1 bg-line" />
@@ -120,22 +149,10 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
           {!connected && <p className="mt-4 text-center text-sm text-muted">Conectando ao servidor…</p>}
         </form>
 
-        <div className="mt-6 grid grid-cols-3 gap-3 text-center text-xs text-muted">
-          <Rule n="1" text="Uma letra é sorteada" />
-          <Rule n="2" text="Diga uma palavra do tema" />
-          <Rule n="3" text="Não deixe a bomba explodir" />
-        </div>
       </div>
       <BombMark className="pointer-events-none fixed -right-16 -bottom-16 h-64 w-64 opacity-[0.04]" />
+      <StopMark className="pointer-events-none fixed -top-14 -left-14 h-52 w-52 opacity-[0.04]" />
     </div>
   );
 }
 
-function Rule({ n, text }: { n: string; text: string }) {
-  return (
-    <div className="rounded-2xl border border-line/60 bg-panel/50 p-3">
-      <div className="font-display text-lg text-fire">{n}</div>
-      {text}
-    </div>
-  );
-}

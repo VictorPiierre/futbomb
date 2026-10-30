@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
+import type { StopPublicRoom } from '../../../shared/stop';
 import type { PublicRoom } from '../../../shared/types';
 import { emitAck } from '../net';
 import Avatar from './Avatar';
 
 const MEDALS = ['🥇', '🥈', '🥉', '4º'];
 
-export default function Victory({ room, meId, isHost }: { room: PublicRoom; meId: string; isHost: boolean }) {
-  const winner = room.ranking?.[0] && room.ranking[0].playerId === room.winnerId ? room.ranking[0] : null;
+export default function Victory({ room, meId, isHost }: { room: PublicRoom | StopPublicRoom; meId: string; isHost: boolean }) {
+  const ranking = (room.ranking ?? []).map((r) => ({
+    ...r,
+    stat: 'score' in r ? `${r.score} pts` : `${r.correct} ✓`,
+    detail: 'score' in r ? `${r.score} pontos` : `${r.correct} ${r.correct === 1 ? 'resposta certa' : 'respostas certas'}`,
+  }));
+  const winner = ranking[0] && ranking[0].playerId === room.winnerId ? ranking[0] : null;
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const connectedPlayers = room.players.filter((p) => p.connected && !p.left).length + room.spectators.filter((s) => s.connected).length;
@@ -23,7 +29,7 @@ export default function Victory({ room, meId, isHost }: { room: PublicRoom; meId
       <Confetti />
       <div className="pop-in relative w-full max-w-md rounded-3xl border border-fire/30 bg-panel p-6 text-center shadow-[0_0_80px_-20px_rgb(255_122_26/0.45)]">
         <div className="text-5xl">🏆</div>
-        <p className="mt-2 font-display text-2xl text-fire sm:text-3xl">CAMPEÃO DO PAVIO CURTO!</p>
+        <p className="mt-2 font-display text-2xl text-fire sm:text-3xl">{room.kind === 'stop' ? 'CAMPEÃO DO STOP!' : 'CAMPEÃO DO PAVIO CURTO!'}</p>
         {winner ? (
           <div className="mt-5 flex flex-col items-center">
             <div className="turn-glow rounded-full">
@@ -31,7 +37,7 @@ export default function Victory({ room, meId, isHost }: { room: PublicRoom; meId
             </div>
             <p className="mt-3 font-display text-3xl">{winner.name}</p>
             <p className="text-sm text-muted">
-              {winner.correct} {winner.correct === 1 ? 'resposta certa' : 'respostas certas'}
+              {winner.detail}
               {winner.playerId === meId && ' · É você! 🎉'}
             </p>
           </div>
@@ -40,7 +46,7 @@ export default function Victory({ room, meId, isHost }: { room: PublicRoom; meId
         )}
 
         <ol className="mt-6 space-y-2 text-left">
-          {room.ranking?.map((r) => (
+          {ranking.map((r) => (
             <li
               key={r.playerId}
               className={`flex items-center gap-3 rounded-xl px-3 py-2 ${r.place === 1 ? 'bg-fire/10' : 'bg-panel-2'} ${r.playerId === meId ? 'ring-1 ring-pop/60' : ''}`}
@@ -49,7 +55,7 @@ export default function Victory({ room, meId, isHost }: { room: PublicRoom; meId
               <Avatar emoji={r.avatar} id={r.playerId} size={32} dim={r.place > 1} />
               <span className="min-w-0 flex-1 truncate font-semibold">{r.name}</span>
               {r.left && <span className="text-[10px] font-bold text-danger">SAIU</span>}
-              <span className="text-xs text-muted tabular-nums">{r.correct} ✓</span>
+              <span className="text-xs text-muted tabular-nums">{r.stat}</span>
             </li>
           ))}
         </ol>

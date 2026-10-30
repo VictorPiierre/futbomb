@@ -102,6 +102,11 @@ export const sfx = {
     [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.22, 'triangle', 0.16, i * 0.12));
     tone(1318, 0.5, 'triangle', 0.14, 0.5);
   },
+  stop() {
+    tone(1400, 0.12, 'square', 0.08);
+    tone(1050, 0.12, 'square', 0.08, 0.13);
+    tone(700, 0.35, 'sawtooth', 0.07, 0.26, 300);
+  },
   start() {
     tone(440, 0.12, 'square', 0.06);
     tone(440, 0.12, 'square', 0.06, 0.25);

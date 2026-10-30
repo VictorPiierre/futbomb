@@ -11,6 +11,8 @@ export interface Entity {
   name: string;
   /** Letras iniciais possíveis (nome + apelidos). */
   letters: Set<string>;
+  /** Banco principal (curado). Os "extra" só ampliam o reconhecimento. */
+  core: boolean;
 }
 
 export type LookupResult =
@@ -80,17 +82,25 @@ function levenshtein(a: string, b: string, max: number): number {
 
 export class NameIndex {
   readonly entities: Entity[] = [];
+  extraCount = 0;
   private byKey = new Map<string, Entity[]>();
   private keysByLetter = new Map<string, string[]>();
 
-  constructor(file: string, private theme: Theme) {
-    const records: { name: string; aliases?: string[] }[] = JSON.parse(fs.readFileSync(file, 'utf8'));
-    for (const rec of records) {
+  constructor(file: string, private theme: Theme, extraFile?: string) {
+    const core: { name: string; aliases?: string[] }[] = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const extra: { name: string; aliases?: string[] }[] =
+      extraFile && fs.existsSync(extraFile) ? JSON.parse(fs.readFileSync(extraFile, 'utf8')) : [];
+    const seen = new Set<string>();
+    for (const [i, rec] of [...core, ...extra].entries()) {
+      const isCore = i < core.length;
       const base = normalize(rec.name);
       if (!base) continue;
       // Prefixo do tema: "laranja" cor e "laranja" fruta são respostas diferentes.
       const id = `${theme}:${base}`;
-      const entity: Entity = { id, name: rec.name, letters: new Set() };
+      if (seen.has(id)) continue;
+      seen.add(id);
+      if (!isCore) this.extraCount++;
+      const entity: Entity = { id, name: rec.name, letters: new Set(), core: isCore };
       const keys = new Set<string>();
       for (const n of [rec.name, ...(rec.aliases ?? [])]) {
         const k = normalize(n);
@@ -117,7 +127,7 @@ export class NameIndex {
   /** Quantas entidades ainda não usadas podem ser respondidas com a letra. */
   available(letter: string, used: Set<string>): number {
     let n = 0;
-    for (const e of this.entities) if (e.letters.has(letter) && !used.has(e.id)) n++;
+    for (const e of this.entities) if (e.core && e.letters.has(letter) && !used.has(e.id)) n++;
     return n;
   }
 
@@ -167,7 +177,7 @@ function pick(list: Entity[], used: Set<string>): LookupResult {
 }
 
 export const NAME_INDEXES = Object.fromEntries(
-  THEME_IDS.map((t) => [t, new NameIndex(path.join(DATA_DIR, `${t}.json`), t)]),
+  THEME_IDS.map((t) => [t, new NameIndex(path.join(DATA_DIR, `${t}.json`), t, path.join(DATA_DIR, 'extra', `${t}.json`))]),
 ) as Record<Theme, NameIndex>;
 
 // Palavras recusadas, para revisar e ampliar o banco (GET /api/recusadas).

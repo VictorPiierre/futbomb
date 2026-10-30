@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
+import type { StopPublicRoom } from '../../../shared/stop';
 import type { GameFx, PublicRoom } from '../../../shared/types';
 import { inviteLink, useSocketEvent } from '../net';
 import { isSoundOn, setSoundOn, sfx } from '../sound';
 import Arena from './Arena';
 import { IconCopy, IconGear, IconLogout, IconMute, IconVolume, IconX, Logo } from './Icons';
 import Lobby, { SettingsPanel } from './Lobby';
+import StopGame, { StopSettingsPanel } from './StopGame';
 import Victory from './Victory';
 
 interface Props {
-  room: PublicRoom;
+  room: PublicRoom | StopPublicRoom;
   meId: string;
   connected: boolean;
   onLeave: () => void;
@@ -43,13 +45,16 @@ export default function RoomView({ room, meId, connected, onLeave }: Props) {
   });
 
   useEffect(() => {
-    document.title = room.phase === 'playing' && room.game ? `Letra ${room.game.letter} · Pavio Curto` : `Sala #${room.code} · Pavio Curto`;
-  }, [room.phase, room.game?.letter, room.code]);
+    const game = room.kind === 'stop' ? 'Stop' : 'Pavio Curto';
+    const letter = room.kind === 'stop' ? room.letter : room.game?.letter;
+    document.title = room.phase !== 'lobby' && room.phase !== 'ended' && letter ? `Letra ${letter} · ${game}` : `Sala #${room.code} · ${game}`;
+  }, [room]);
 
-  const me = room.players.find((p) => p.id === meId);
+  const me = room.kind === 'pavio' ? room.players.find((p) => p.id === meId) : undefined;
+  const live = room.phase !== 'lobby' && room.phase !== 'ended';
   const isHost = room.hostId === meId;
   const status =
-    room.phase === 'playing'
+    live
       ? { label: 'AO VIVO', cls: 'bg-fire/15 text-fire border-fire/30' }
       : room.phase === 'ended'
         ? { label: 'FIM DE JOGO', cls: 'bg-pop/15 text-pop-soft border-pop/30' }
@@ -59,14 +64,14 @@ export default function RoomView({ room, meId, connected, onLeave }: Props) {
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-30 border-b border-line/70 bg-ink/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5">
-          <Logo />
+          <Logo game={room.kind} />
           <div className="mx-auto hidden min-w-0 flex-col items-center leading-tight sm:flex">
             <span className="truncate text-sm font-semibold">Sala de {room.hostName || '—'}</span>
             <span className="font-display text-xs text-pop-soft">#{room.code}</span>
           </div>
           <span className="ml-auto font-display text-xs text-pop-soft sm:hidden">#{room.code}</span>
           <span className={`hidden rounded-full border px-2.5 py-1 text-[11px] font-bold tracking-wider sm:inline-block ${status.cls}`}>
-            {room.phase === 'playing' && <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-fire align-middle" />}
+            {live && <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-fire align-middle" />}
             {status.label}
           </span>
           <div className="flex items-center gap-1.5">
@@ -95,7 +100,9 @@ export default function RoomView({ room, meId, connected, onLeave }: Props) {
       </header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-4 sm:py-6">
-        {room.phase === 'lobby' ? (
+        {room.kind === 'stop' ? (
+          <StopGame room={room} meId={meId} isHost={isHost} onCopy={copyInvite} />
+        ) : room.phase === 'lobby' ? (
           <Lobby room={room} meId={meId} isHost={isHost} onCopy={copyInvite} />
         ) : (
           <Arena room={room} meId={meId} me={me} />
@@ -113,7 +120,11 @@ export default function RoomView({ room, meId, connected, onLeave }: Props) {
                 <IconX width={16} />
               </button>
             </div>
-            <SettingsPanel room={room} editable={isHost && room.phase === 'lobby'} />
+            {room.kind === 'stop' ? (
+              <StopSettingsPanel room={room} editable={isHost && room.phase === 'lobby'} />
+            ) : (
+              <SettingsPanel room={room} editable={isHost && room.phase === 'lobby'} />
+            )}
             {!(isHost && room.phase === 'lobby') && (
               <p className="mt-3 text-xs text-muted">
                 {isHost ? 'As configurações só podem ser alteradas antes da partida.' : 'Somente o anfitrião altera as configurações.'}

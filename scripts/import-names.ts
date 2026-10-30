@@ -103,4 +103,5 @@ Temas: ${Object.keys(TARGETS).join(', ')}`);
   console.log(`✔ ${target}: ${added} novos, ${updated} atualizados, total ${records.length}.`);
 }
 
-main();
+// Só roda quando chamado direto (o build-extra reaproveita mergeRecords).
+if (process.argv[1]?.replace(/\\/g, '/').endsWith('scripts/import-names.ts')) main();

@@ -12,7 +12,10 @@
     "start": "tsx server/index.ts",
     "import": "tsx scripts/import-names.ts",
     "smoke": "tsx scripts/smoke-test.ts",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "fetch:wikidata": "tsx scripts/fetch-wikidata.ts",
+    "build:extra": "tsx scripts/build-extra.ts",
+    "smoke:stop": "tsx scripts/smoke-stop.ts"
   },
   "dependencies": {
     "express": "^5.3.0",

@@ -31,16 +31,43 @@ export const IconLink = (p: P) => (
   <svg {...base} {...p}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg>
 );
 
-export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
+export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game?: 'pavio' | 'stop' | 'hub' }) {
   const big = size === 'lg';
+  const mark = big ? 'h-16 w-16 sm:h-20 sm:w-20' : 'h-9 w-9';
+  if (game === 'hub') {
+    return (
+      <span className={`font-display leading-none ${big ? 'title-stroke text-5xl sm:text-6xl' : 'text-xl'}`}>
+        Joga<span className="text-fire">tina</span>
+      </span>
+    );
+  }
+  if (game === 'stop') {
+    return (
+      <div className={`flex items-center ${big ? 'gap-3' : 'gap-2'}`}>
+        <StopMark className={mark} />
+        <span className={`font-display leading-none text-pop ${big ? 'text-5xl sm:text-7xl' : 'text-xl'}`}>Stop!</span>
+      </div>
+    );
+  }
   return (
     <div className={`flex items-center ${big ? 'gap-3' : 'gap-2'}`}>
-      <BombMark className={big ? 'h-16 w-16 sm:h-20 sm:w-20' : 'h-9 w-9'} />
+      <BombMark className={mark} />
       <span className={`font-display leading-[0.9] ${big ? 'title-stroke text-5xl sm:text-7xl' : 'text-xl'}`}>
         <span className="text-white">Pavio</span>{big ? <br /> : ' '}
         <span className="text-fire">Curto</span>
       </span>
     </div>
+  );
+}
+
+/** Marca do Stop: placa octogonal. */
+export function StopMark({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} aria-hidden>
+      <path d="M21 4h22l17 17v22L43 60H21L4 43V21Z" fill="#ff3d7f" stroke="#ffd0df" strokeWidth="2.5" strokeLinejoin="round" />
+      <path d="M23 9h18l14 14v18L41 55H23L9 41V23Z" fill="none" stroke="#fff" strokeOpacity=".55" strokeWidth="1.5" />
+      <text x="32" y="38.5" textAnchor="middle" fontFamily="Lilita One, sans-serif" fontSize="15" fill="#fff">STOP</text>
+    </svg>
   );
 }
 
