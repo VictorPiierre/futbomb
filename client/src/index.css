@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Russo One", "Outfit", ui-sans-serif, sans-serif;
+
+  --color-ink: #0d0f12;
+  --color-panel: #15181d;
+  --color-panel-2: #1c2027;
+  --color-line: #2a3039;
+  --color-muted: #8b94a5;
+  --color-lime: #c4ff3a;
+  --color-lime-deep: #8fcf12;
+  --color-violet: #8b5cf6;
+  --color-violet-soft: #b9a3ff;
+  --color-danger: #ff4d5e;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgb(139 92 246 / 0.16), transparent 60%),
+    radial-gradient(900px 500px at 50% 110%, rgb(196 255 58 / 0.07), transparent 60%),
+    var(--color-ink);
+  color: #eef1f6;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: rgb(196 255 58 / 0.35);
+}
+
+.font-display {
+  letter-spacing: 0.02em;
+}
+
+/* Gramado: linhas do meio-campo atrás da arena */
+.pitch {
+  background:
+    radial-gradient(circle at 50% 50%, transparent 0 27%, rgb(255 255 255 / 0.06) 27% 27.6%, transparent 27.6%),
+    linear-gradient(90deg, transparent calc(50% - 1px), rgb(255 255 255 / 0.05) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)),
+    radial-gradient(circle at 50% 50%, rgb(196 255 58 / 0.06), transparent 65%);
+}
+
+.glass {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.04), rgb(255 255 255 / 0.015));
+  border: 1px solid rgb(255 255 255 / 0.07);
+  backdrop-filter: blur(6px);
+}
+
+/* ---------- animações ---------- */
+@keyframes shake {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  20% { transform: translate(-3px, 1px) rotate(-4deg); }
+  40% { transform: translate(3px, -1px) rotate(4deg); }
+  60% { transform: translate(-2px, -1px) rotate(-3deg); }
+  80% { transform: translate(2px, 1px) rotate(3deg); }
+}
+.bomb-shake { animation: shake 0.22s linear infinite; }
+
+@keyframes input-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+.input-shake { animation: input-shake 0.25s ease 2; }
+
+@keyframes hop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+.bomb-hop { animation: hop 0.35s ease-out; }
+
+@keyframes flash-out {
+  0% { opacity: 0.95; transform: scale(0.3); }
+  100% { opacity: 0; transform: scale(2.6); }
+}
+.explosion-flash {
+  background: radial-gradient(circle, #fff 0%, #ffd84a 22%, #ff7a2f 45%, rgb(255 77 94 / 0.6) 62%, transparent 72%);
+  animation: flash-out 0.75s ease-out forwards;
+}
+
+@keyframes particle {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.3); }
+}
+.particle { animation: particle 0.8s cubic-bezier(0.2, 0.7, 0.3, 1) forwards; }
+
+@keyframes screen-kick {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-6px, 4px); }
+  50% { transform: translate(5px, -4px); }
+  75% { transform: translate(-3px, -2px); }
+}
+.screen-kick { animation: screen-kick 0.35s ease-out; }
+
+@keyframes heart-lose {
+  0% { transform: scale(1.4); filter: brightness(2); }
+  40% { transform: scale(0.6) rotate(-20deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+.heart-lose { animation: heart-lose 0.6s ease-out; }
+
+@keyframes seat-correct {
+  0% { box-shadow: 0 0 0 0 rgb(196 255 58 / 0.9); }
+  100% { box-shadow: 0 0 0 26px rgb(196 255 58 / 0); }
+}
+.seat-correct { animation: seat-correct 0.7s ease-out; }
+
+@keyframes seat-hit {
+  0%, 100% { transform: translate(0); }
+  20% { transform: translate(-6px); }
+  40% { transform: translate(6px); }
+  60% { transform: translate(-4px); }
+  80% { transform: translate(4px); }
+}
+.seat-hit { animation: seat-hit 0.45s ease; }
+
+@keyframes turn-glow {
+  0%, 100% { box-shadow: 0 0 0 3px var(--color-lime), 0 0 22px 4px rgb(196 255 58 / 0.45); }
+  50% { box-shadow: 0 0 0 3px var(--color-lime), 0 0 34px 10px rgb(196 255 58 / 0.25); }
+}
+.turn-glow { animation: turn-glow 1.2s ease-in-out infinite; }
+
+@keyframes float-up {
+  0% { opacity: 0; transform: translate(-50%, 6px) scale(0.9); }
+  15% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -28px); }
+}
+.float-up { animation: float-up 1.4s ease-out forwards; }
+
+@keyframes letter-in {
+  0% { opacity: 0; transform: scale(2.2); filter: blur(6px); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+.letter-in { animation: letter-in 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.slide-in { animation: slide-in 0.3s ease-out; }
+
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.pop-in { animation: pop-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.15); }
+
+@keyframes spark {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.7; }
+}
+.spark { animation: spark 0.15s linear infinite; transform-box: fill-box; transform-origin: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+@layer components {
+  .btn-primary {
+    @apply cursor-pointer rounded-xl bg-lime px-5 py-3 font-display text-lg text-ink transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100;
+    box-shadow: 0 10px 30px -10px rgb(196 255 58 / 0.6);
+  }
+  .btn-secondary {
+    @apply cursor-pointer rounded-xl border border-violet/50 bg-violet/15 py-3 font-semibold text-violet-soft transition hover:bg-violet/25 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-icon {
+    @apply grid h-9 w-9 cursor-pointer place-items-center rounded-lg border border-line bg-panel-2 text-muted transition hover:border-lime/40 hover:text-white;
+  }
+  .chip {
+    @apply cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed;
+  }
+  .chip-on {
+    @apply border-lime/70 bg-lime/15 text-lime;
+  }
+}

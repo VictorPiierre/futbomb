@@ -1,0 +1,9 @@
+# Servidor do jogo (Socket.IO) no Render — https://render.com
+services:
+  - type: web
+    name: futbomb
+    runtime: node
+    plan: free
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health

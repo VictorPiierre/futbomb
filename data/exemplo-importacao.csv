@@ -1,0 +1,5 @@
+nome,apelidos
+# Exemplo: copie este formato para importar novos nomes
+# npm run import -- jogadores data/exemplo-importacao.csv
+Lionel Messi,Messi|Leo Messi|La Pulga
+Neymar,Neymar Jr|Neymar Júnior
