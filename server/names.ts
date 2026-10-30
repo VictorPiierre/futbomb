@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalize } from '../shared/normalize.ts';
-import { THEMES, THEME_IDS, type Theme } from '../shared/types.ts';
+import { THEMES, THEME_IDS, TITLE_THEMES, type Theme } from '../shared/types.ts';
 
 const DATA_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
 
@@ -32,6 +32,11 @@ function clubVariants(key: string): string[] {
   while (end - start > 1 && CLUB_AFFIXES.has(tokens[end - 1])) end--;
   const stripped = tokens.slice(start, end).join(' ');
   return stripped !== key && stripped.length >= 3 ? [stripped] : [];
+}
+
+function withoutArticle(key: string): string[] {
+  const m = key.match(/^(o|a|os|as|um|uma|the) (.{3,})$/);
+  return m ? [m[2]] : [];
 }
 
 function singular(w: string) {
@@ -92,6 +97,7 @@ export class NameIndex {
         if (!k) continue;
         keys.add(k);
         if (theme === 'clubs') clubVariants(k).forEach((v) => keys.add(v));
+        if (TITLE_THEMES.includes(theme)) withoutArticle(k).forEach((v) => keys.add(v));
       }
       for (const k of keys) {
         entity.letters.add(k[0].toUpperCase());

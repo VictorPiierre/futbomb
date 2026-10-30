@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import type { Server } from 'socket.io';
 import { normalize } from '../shared/normalize.ts';
 import {
-  START_LIVES, MAX_PLAYERS, TURN_TIMES, THEMES, THEME_IDS, type Theme,
+  START_LIVES, MAX_PLAYERS, TURN_TIMES, THEMES, THEME_IDS, ADULT_THEMES, type Theme,
   type AnswerResult, type GameFx, type HistoryItem, type PublicRoom, type Settings,
 } from '../shared/types.ts';
 import { NAME_INDEXES, recordRejected } from './names.ts';
@@ -240,8 +240,8 @@ export class Room {
   private drawTheme(activeCount: number): Theme {
     if (this.settings.theme !== 'mixed') return this.settings.theme;
     const g = this.game!;
-    const playable = THEME_IDS.filter((t) => t !== g.lastTheme && this.eligibleLetters(t, activeCount).length > 0);
-    const pool = playable.length ? playable : THEME_IDS;
+    const playable = THEME_IDS.filter((t) => t !== g.lastTheme && !ADULT_THEMES.includes(t) && this.eligibleLetters(t, activeCount).length > 0);
+    const pool = playable.length ? playable : THEME_IDS.filter((t) => !ADULT_THEMES.includes(t));
     return pool[Math.floor(Math.random() * pool.length)];
   }
 

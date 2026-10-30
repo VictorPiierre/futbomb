@@ -12,7 +12,21 @@ export const THEMES = {
   countries: { label: 'Países', short: 'Países', icon: '🌎', noun: 'país', article: 'um', wordForms: false, aliases: ['paises'] },
   famous: { label: 'Famosos', short: 'Famosos', icon: '⭐', noun: 'famoso', article: 'um', wordForms: false, aliases: ['famosos'] },
   professions: { label: 'Profissões', short: 'Profissões', icon: '💼', noun: 'profissão', article: 'uma', wordForms: true, aliases: ['profissoes'] },
+  names: { label: 'Nomes de pessoas', short: 'Nomes', icon: '🙋', noun: 'nome', article: 'um', wordForms: false, aliases: ['nomes'] },
+  cities: { label: 'Cidades', short: 'Cidades', icon: '🏙️', noun: 'cidade', article: 'uma', wordForms: false, aliases: ['cidades'] },
+  brands: { label: 'Marcas', short: 'Marcas', icon: '🏷️', noun: 'marca', article: 'uma', wordForms: false, aliases: ['marcas'] },
+  games: { label: 'Jogos e brincadeiras', short: 'Jogos', icon: '🎮', noun: 'jogo ou brincadeira', article: 'um', wordForms: false, aliases: ['jogos', 'games'] },
+  movies: { label: 'Filmes', short: 'Filmes', icon: '🎬', noun: 'filme', article: 'um', wordForms: false, aliases: ['filmes'] },
+  shows: { label: 'Séries, novelas e desenhos', short: 'Séries', icon: '📺', noun: 'série, novela ou desenho', article: 'uma', wordForms: false, aliases: ['series', 'desenhos', 'novelas'] },
+  sports: { label: 'Esportes', short: 'Esportes', icon: '🏅', noun: 'esporte', article: 'um', wordForms: true, aliases: ['esportes'] },
+  body: { label: 'Partes do corpo', short: 'Corpo', icon: '🫀', noun: 'parte do corpo', article: 'uma', wordForms: true, aliases: ['corpo'] },
+  insults: { label: 'Xingamentos', short: 'Xingamentos', icon: '🤬', noun: 'xingamento', article: 'um', wordForms: true, aliases: ['xingamentos'] },
 } as const;
+
+/** Temas que só entram se escolhidos de propósito (fora do modo Surpresa). */
+export const ADULT_THEMES: readonly Theme[] = ['insults'];
+/** Títulos: aceita sem o artigo inicial ("Rei Leão" = "O Rei Leão"). */
+export const TITLE_THEMES: readonly Theme[] = ['movies', 'shows', 'games'];
 
 export type Theme = keyof typeof THEMES;
 export const THEME_IDS = Object.keys(THEMES) as Theme[];

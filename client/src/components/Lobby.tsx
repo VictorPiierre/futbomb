@@ -156,7 +156,11 @@ export function SettingsPanel({ room, editable }: { room: PublicRoom; editable: 
           )}
         </div>
         <p className="mt-2 text-xs text-muted">
-          {s.theme === 'mixed' ? '🎲 O tema muda a cada volta!' : `Tema: ${themeLabel(s.theme)}`}
+          {s.theme === 'mixed'
+            ? '🎲 O tema muda a cada volta! (Xingamentos fica de fora)'
+            : s.theme === 'insults'
+              ? '🔞 Tema adulto: palavrões e xingamentos'
+              : `Tema: ${themeLabel(s.theme)}`}
         </p>
       </Field>
       <Field label="Tempo por jogador">

@@ -4,11 +4,13 @@ Jogo multiplayer em tempo real (2 a 4 jogadores). Uma letra é sorteada e, na su
 você precisa digitar uma palavra do tema que comece com ela antes que a bomba exploda.
 
 Temas: ⚽ Jogadores de futebol · 🛡️ Clubes · 🦁 Animais · 🧸 Objetos · 🍎 Comidas e frutas ·
-🎨 Cores · 🌎 Países · ⭐ Famosos · 💼 Profissões · 🎲 **Surpresa** (o tema muda a cada volta).
+🎨 Cores · 🌎 Países · ⭐ Famosos · 💼 Profissões · 🙋 Nomes · 🏙️ Cidades · 🏷️ Marcas ·
+🎮 Jogos e brincadeiras · 🎬 Filmes · 📺 Séries, novelas e desenhos · 🏅 Esportes · 🫀 Partes do corpo ·
+🤬 Xingamentos (tema adulto, só quando escolhido) · 🎲 **Surpresa** (o tema muda a cada volta).
 
 - Front-end: React + Vite + TypeScript + Tailwind CSS
 - Back-end: Node.js + Express + Socket.IO (cronômetro, turnos, vidas e validação **no servidor**)
-- Banco de palavras: um arquivo por tema em `data/` (~2.300 entradas no total)
+- Banco de palavras: um arquivo por tema em `data/` (~6.000 entradas no total)
 
 ## Rodar localmente
 
@@ -86,7 +88,9 @@ Variável do servidor: `PORT` (padrão 3000).
 ## Banco de palavras
 
 Cada tema tem seu arquivo em `data/`: `players`, `clubs`, `animals`, `objects`, `foods`,
-`colors`, `countries`, `famous` e `professions` (`.json`). Formato:
+`colors`, `countries`, `famous`, `professions`, `names`, `cities`, `brands`, `games`,
+`movies`, `shows`, `sports`, `body` e `insults` (`.json`). Em filmes, séries e jogos o artigo
+inicial é opcional ("Rei Leão" = "O Rei Leão"). Formato:
 
 ```json
 { "name": "Lionel Messi", "aliases": ["Messi", "Leo Messi", "La Pulga"] }
