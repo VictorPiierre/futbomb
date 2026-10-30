@@ -2,17 +2,20 @@
 
 @theme {
   --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Russo One", "Outfit", ui-sans-serif, sans-serif;
+  --font-display: "Lilita One", "Outfit", ui-sans-serif, sans-serif;
 
-  --color-ink: #0d0f12;
-  --color-panel: #15181d;
-  --color-panel-2: #1c2027;
-  --color-line: #2a3039;
-  --color-muted: #8b94a5;
-  --color-lime: #c4ff3a;
-  --color-lime-deep: #8fcf12;
-  --color-violet: #8b5cf6;
-  --color-violet-soft: #b9a3ff;
+  /* Pavio Curto: palco roxo-noite, fogo laranja, faísca amarela, rosa de destaque */
+  --color-ink: #120d1b;
+  --color-panel: #1b1527;
+  --color-panel-2: #241c33;
+  --color-line: #382c4b;
+  --color-muted: #a596b8;
+  --color-fire: #ff7a1a;
+  --color-fire-deep: #e2560b;
+  --color-spark: #ffd23f;
+  --color-pop: #ff3d7f;
+  --color-pop-soft: #ff8fb3;
+  --color-ok: #3ddc97;
   --color-danger: #ff4d5e;
 }
 
@@ -25,35 +28,42 @@ body,
 body {
   margin: 0;
   background:
-    radial-gradient(1200px 600px at 50% -10%, rgb(139 92 246 / 0.16), transparent 60%),
-    radial-gradient(900px 500px at 50% 110%, rgb(196 255 58 / 0.07), transparent 60%),
+    radial-gradient(1100px 560px at 50% -12%, rgb(255 61 127 / 0.16), transparent 60%),
+    radial-gradient(900px 520px at 50% 112%, rgb(255 122 26 / 0.12), transparent 60%),
+    radial-gradient(rgb(255 255 255 / 0.035) 1px, transparent 1.2px) 0 0 / 22px 22px,
     var(--color-ink);
-  color: #eef1f6;
+  color: #f6f0fb;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
 
 ::selection {
-  background: rgb(196 255 58 / 0.35);
+  background: rgb(255 122 26 / 0.4);
 }
 
 .font-display {
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
-/* Gramado: linhas do meio-campo atrás da arena */
-.pitch {
+/* Palco: anéis de onda de choque atrás da arena */
+.stage {
   background:
-    radial-gradient(circle at 50% 50%, transparent 0 27%, rgb(255 255 255 / 0.06) 27% 27.6%, transparent 27.6%),
-    linear-gradient(90deg, transparent calc(50% - 1px), rgb(255 255 255 / 0.05) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)),
-    radial-gradient(circle at 50% 50%, rgb(196 255 58 / 0.06), transparent 65%);
+    radial-gradient(circle at 50% 50%, transparent 0 30%, rgb(255 255 255 / 0.05) 30% 30.5%, transparent 30.5%),
+    radial-gradient(circle at 50% 50%, transparent 0 44%, rgb(255 255 255 / 0.035) 44% 44.4%, transparent 44.4%),
+    radial-gradient(circle at 50% 50%, rgb(255 122 26 / 0.1), rgb(255 61 127 / 0.04) 45%, transparent 68%);
 }
 
 .glass {
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.04), rgb(255 255 255 / 0.015));
-  border: 1px solid rgb(255 255 255 / 0.07);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.05), rgb(255 255 255 / 0.02));
+  border: 1px solid rgb(255 255 255 / 0.08);
   backdrop-filter: blur(6px);
+}
+
+/* Título com contorno, estilo letreiro */
+.title-stroke {
+  -webkit-text-stroke: 0;
+  text-shadow: 0 3px 0 var(--color-fire-deep), 0 8px 24px rgb(255 122 26 / 0.35);
 }
 
 /* ---------- animações ---------- */
@@ -111,8 +121,8 @@ body {
 .heart-lose { animation: heart-lose 0.6s ease-out; }
 
 @keyframes seat-correct {
-  0% { box-shadow: 0 0 0 0 rgb(196 255 58 / 0.9); }
-  100% { box-shadow: 0 0 0 26px rgb(196 255 58 / 0); }
+  0% { box-shadow: 0 0 0 0 rgb(61 220 151 / 0.9); }
+  100% { box-shadow: 0 0 0 26px rgb(61 220 151 / 0); }
 }
 .seat-correct { animation: seat-correct 0.7s ease-out; }
 
@@ -126,8 +136,8 @@ body {
 .seat-hit { animation: seat-hit 0.45s ease; }
 
 @keyframes turn-glow {
-  0%, 100% { box-shadow: 0 0 0 3px var(--color-lime), 0 0 22px 4px rgb(196 255 58 / 0.45); }
-  50% { box-shadow: 0 0 0 3px var(--color-lime), 0 0 34px 10px rgb(196 255 58 / 0.25); }
+  0%, 100% { box-shadow: 0 0 0 3px var(--color-fire), 0 0 22px 4px rgb(255 122 26 / 0.5); }
+  50% { box-shadow: 0 0 0 3px var(--color-fire), 0 0 34px 10px rgb(255 122 26 / 0.28); }
 }
 .turn-glow { animation: turn-glow 1.2s ease-in-out infinite; }
 
@@ -169,19 +179,19 @@ body {
 
 @layer components {
   .btn-primary {
-    @apply cursor-pointer rounded-xl bg-lime px-5 py-3 font-display text-lg text-ink transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100;
-    box-shadow: 0 10px 30px -10px rgb(196 255 58 / 0.6);
+    @apply cursor-pointer rounded-xl bg-fire px-5 py-3 font-display text-lg text-ink transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:brightness-100;
+    box-shadow: 0 10px 30px -10px rgb(255 122 26 / 0.6);
   }
   .btn-secondary {
-    @apply cursor-pointer rounded-xl border border-violet/50 bg-violet/15 py-3 font-semibold text-violet-soft transition hover:bg-violet/25 disabled:cursor-not-allowed disabled:opacity-40;
+    @apply cursor-pointer rounded-xl border border-pop/50 bg-pop/15 py-3 font-semibold text-pop-soft transition hover:bg-pop/25 disabled:cursor-not-allowed disabled:opacity-40;
   }
   .btn-icon {
-    @apply grid h-9 w-9 cursor-pointer place-items-center rounded-lg border border-line bg-panel-2 text-muted transition hover:border-lime/40 hover:text-white;
+    @apply grid h-9 w-9 cursor-pointer place-items-center rounded-lg border border-line bg-panel-2 text-muted transition hover:border-fire/40 hover:text-white;
   }
   .chip {
     @apply cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed;
   }
   .chip-on {
-    @apply border-lime/70 bg-lime/15 text-lime;
+    @apply border-fire/70 bg-fire/15 text-fire;
   }
 }

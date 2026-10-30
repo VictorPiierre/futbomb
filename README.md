@@ -1,4 +1,4 @@
-# ⚽💣 FutBomb
+# 💣 Pavio Curto
 
 Jogo multiplayer em tempo real (2 a 4 jogadores). Uma letra é sorteada e, na sua vez,
 você precisa digitar uma palavra do tema que comece com ela antes que a bomba exploda.
@@ -49,6 +49,8 @@ npm run smoke
 ```
 
 (com o servidor rodando em outro terminal via `npm start`).
+
+> O projeto começou como "FutBomb"; o repositório e os links (`futbomb.vercel.app`) mantêm esse nome.
 
 ## Jogar com amigos em outras redes
 
@@ -127,7 +129,7 @@ A lista é zerada quando o servidor reinicia.
 - Sala com código de 4 letras e link `/s/CODIGO`; anfitrião escolhe tema (ou Surpresa), tempo (5–30 s) e máximo de jogadores (2–4).
 - Todos começam com 2 vidas; tempo esgotado = explosão e perda de vida; 0 vidas = eliminado (vira espectador).
 - Quem começa é sorteado (nunca o mesmo da partida anterior); a cada volta, quem abre é o próximo da roda.
-- A mesma letra vale por uma volta inteira; as letras só repetem depois de passar por todas as possíveis (inclusive entre partidas).
+- A mesma letra vale por uma volta inteira; o sorteio prioriza as letras que estão há mais tempo sem sair (inclusive entre partidas e temas).
 - Letras difíceis (K, W, X, Y, Z, Q, U) só saem quando há nomes suficientes disponíveis.
 - Resposta errada: aviso e nova tentativa dentro do tempo restante.
 - Quem entra durante a partida assiste e joga a próxima; quem atualiza a página volta para o mesmo lugar;

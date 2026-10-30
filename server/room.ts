@@ -55,15 +55,15 @@ interface GameState {
 export class Room {
   readonly code: string;
   hostId = '';
-  settings: Settings = { theme: 'players', turnTime: 10, maxPlayers: 4 };
+  settings: Settings = { theme: 'mixed', turnTime: 10, maxPlayers: 4 };
   phase: 'lobby' | 'playing' | 'ended' = 'lobby';
   members: Member[] = [];
   game: GameState | null = null;
   winnerId: string | null = null;
   ranking: PublicRoom['ranking'] = null;
-  /** Letras já sorteadas nesta sala (vale entre partidas): só repetem depois de passar por todas. */
-  private usedLetters = new Set<string>();
-  private recentLetters: string[] = [];
+  /** Quando cada letra saiu pela última vez nesta sala (vale entre partidas e temas). */
+  private letterLastDraw = new Map<string, number>();
+  private letterDraws = 0;
   private lastGameStarter = '';
   lastActivity = Date.now();
 
@@ -256,8 +256,8 @@ export class Room {
   private eligibleLetters(theme: Theme, activeCount: number) {
     const index = NAME_INDEXES[theme];
     return LETTERS.map((l) => ({ l, n: index.available(l, this.game!.used) })).filter(
-      // Basta ter respostas para a volta inteira (letras difíceis precisam de folga maior).
-      ({ l, n }) => n >= (HARD_LETTERS.has(l) ? activeCount * 3 : activeCount + 1),
+      // Basta ter respostas para a volta inteira, com um pouco de folga nas letras difíceis.
+      ({ l, n }) => n >= activeCount + (HARD_LETTERS.has(l) ? 2 : 1),
     );
   }
 
@@ -265,18 +265,15 @@ export class Room {
     const index = NAME_INDEXES[theme];
     const counts = LETTERS.map((l) => ({ l, n: index.available(l, this.game!.used) }));
     const eligible = this.eligibleLetters(theme, activeCount);
-    // Evita as últimas letras sorteadas, mesmo quando o ciclo recomeça.
-    const recent = new Set(this.recentLetters.slice(-Math.min(4, Math.max(0, eligible.length - 1))));
-    let fresh = eligible.filter(({ l }) => !this.usedLetters.has(l) && !recent.has(l));
-    if (!fresh.length && eligible.length) {
-      // Todas as letras possíveis já saíram: recomeça o ciclo.
-      this.usedLetters.clear();
-      fresh = eligible.filter(({ l }) => !recent.has(l));
-    }
-    const pool = fresh.length ? fresh : eligible.length ? eligible : [counts.sort((a, b) => b.n - a.n)[0]];
+    if (!eligible.length) return counts.sort((a, b) => b.n - a.n)[0].l;
+    // Prioriza as letras que estão há mais tempo sem sair (nunca sorteadas primeiro) e
+    // sorteia entre o terço "mais esquecido", para não virar uma sequência previsível.
+    const age = (l: string) => this.letterLastDraw.get(l) ?? -1;
+    const byAge = [...eligible].sort((a, b) => age(a.l) - age(b.l));
+    const never = byAge.filter(({ l }) => age(l) < 0);
+    const pool = never.length ? never : byAge.slice(0, Math.max(1, Math.ceil(byAge.length / 3)));
     const letter = pool[randomInt(pool.length)].l;
-    this.usedLetters.add(letter);
-    this.recentLetters = [...this.recentLetters, letter].slice(-8);
+    this.letterLastDraw.set(letter, ++this.letterDraws);
     return letter;
   }
 

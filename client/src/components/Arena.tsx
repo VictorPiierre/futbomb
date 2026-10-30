@@ -105,16 +105,16 @@ export default function Arena({ room, meId, me }: Props) {
           <p className="text-xs font-semibold tracking-[0.2em] text-muted uppercase">
             {mixed ? '🎲 Tema da volta' : 'Categoria'} · Volta {game.round}
           </p>
-          <p key={`${game.round}-${game.theme}`} className="letter-in text-lg font-bold text-violet-soft">
+          <p key={`${game.round}-${game.theme}`} className="letter-in text-lg font-bold text-pop-soft">
             {theme.icon} {theme.label}
           </p>
-          <p key={game.letter} className="letter-in font-display text-4xl leading-tight text-lime sm:text-5xl">
+          <p key={game.letter} className="letter-in font-display text-4xl leading-tight text-fire sm:text-5xl">
             LETRA {game.letter}
           </p>
         </div>
 
         {/* arena */}
-        <div ref={arenaRef} className="pitch relative aspect-square w-full max-w-[600px] rounded-full">
+        <div ref={arenaRef} className="stage relative aspect-square w-full max-w-[600px] rounded-full">
           <div className="absolute inset-0 flex items-center justify-center">
             <Bomb
               letter={game.letter}
@@ -129,7 +129,7 @@ export default function Arena({ room, meId, me }: Props) {
           {explosion && <Explosion key={explosion.key} />}
 
           {floater && (
-            <div key={floater.key} className="float-up pointer-events-none absolute top-[24%] left-1/2 z-20 rounded-full bg-lime px-3 py-1 text-sm font-bold whitespace-nowrap text-ink shadow-lg">
+            <div key={floater.key} className="float-up pointer-events-none absolute top-[24%] left-1/2 z-20 rounded-full bg-ok px-3 py-1 text-sm font-bold whitespace-nowrap text-ink shadow-lg">
               ✓ {floater.text}
             </div>
           )}
@@ -158,10 +158,10 @@ export default function Arena({ room, meId, me }: Props) {
         <p className="mt-2 text-center font-semibold">
           {game.status === 'turn' && current ? (
             current.id === meId ? (
-              <span className="text-lime">Sua vez! Digite {prompt} que começa com {game.letter}</span>
+              <span className="text-fire">Sua vez! Digite {prompt} que começa com {game.letter}</span>
             ) : (
               <>
-                Vez de <span className="text-lime">{current.name}</span> — {theme.noun} com {game.letter}
+                Vez de <span className="text-fire">{current.name}</span> — {theme.noun} com {game.letter}
               </>
             )
           ) : (
@@ -177,7 +177,7 @@ export default function Arena({ room, meId, me }: Props) {
           <h3 className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">Placar</h3>
           <ul className="space-y-2">
             {players.map((p) => (
-              <li key={p.id} className={`flex items-center gap-2.5 rounded-xl px-2 py-1.5 ${p.id === game.currentPlayerId ? 'bg-lime/10' : ''}`}>
+              <li key={p.id} className={`flex items-center gap-2.5 rounded-xl px-2 py-1.5 ${p.id === game.currentPlayerId ? 'bg-fire/10' : ''}`}>
                 <Avatar emoji={p.avatar} id={p.id} size={30} dim={p.eliminated} />
                 <span className={`min-w-0 flex-1 truncate text-sm font-semibold ${p.eliminated ? 'text-muted line-through' : ''}`}>
                   {p.name}
@@ -202,7 +202,7 @@ export default function Arena({ room, meId, me }: Props) {
             <ul className="space-y-1.5">
               {game.history.slice(0, 10).map((h) => (
                 <li key={h.id} className="slide-in flex items-baseline gap-2 text-sm">
-                  <span className="text-lime">✓</span>
+                  <span className="text-ok">✓</span>
                   <span className="min-w-0 flex-1 truncate font-semibold">{h.canonical}</span>
                   <span className="shrink-0 text-xs text-muted">{h.playerName}</span>
                 </li>
@@ -234,12 +234,12 @@ function Seat({ player, isCurrent, isMe, isHost, typing, flash }: {
         </div>
         {out && <span className="absolute inset-0 grid place-items-center text-3xl">💀</span>}
         {isHost && !out && (
-          <span className="absolute -top-1 -right-1 grid h-5 w-5 place-items-center rounded-full bg-violet text-white" title="Anfitrião">
+          <span className="absolute -top-1 -right-1 grid h-5 w-5 place-items-center rounded-full bg-pop text-white" title="Anfitrião">
             <IconCrown width={11} />
           </span>
         )}
       </div>
-      <span className={`mt-1.5 max-w-full truncate text-sm font-bold ${isMe ? 'text-lime' : ''} ${out ? 'text-muted' : ''}`}>
+      <span className={`mt-1.5 max-w-full truncate text-sm font-bold ${isMe ? 'text-fire' : ''} ${out ? 'text-muted' : ''}`}>
         {player.name}
       </span>
       {out ? (
@@ -269,7 +269,7 @@ function Explosion() {
           dx: Math.cos(ang) * dist,
           dy: Math.sin(ang) * dist,
           size: 6 + Math.random() * 10,
-          color: ['#ffd84a', '#ff7a2f', '#ff4d5e', '#c4ff3a', '#ffffff'][i % 5],
+          color: ['#ffd23f', '#ff7a1a', '#ff4d5e', '#ff3d7f', '#ffffff'][i % 5],
         };
       }),
     [],
@@ -353,7 +353,7 @@ function AnswerBar({ room, me, meId, feed }: {
             socket.emit('game:typing', e.target.value);
           }}
           placeholder={placeholder}
-          className={`min-w-0 flex-1 rounded-2xl border-2 bg-panel-2 px-4 py-3.5 text-lg font-semibold outline-none transition placeholder:text-base placeholder:font-normal disabled:cursor-not-allowed disabled:opacity-60 ${myTurn ? 'border-lime/70 shadow-[0_0_0_4px_rgb(196_255_58/0.12)]' : 'border-line'}`}
+          className={`min-w-0 flex-1 rounded-2xl border-2 bg-panel-2 px-4 py-3.5 text-lg font-semibold outline-none transition placeholder:text-base placeholder:font-normal disabled:cursor-not-allowed disabled:opacity-60 ${myTurn ? 'border-fire/70 shadow-[0_0_0_4px_rgb(255_122_26/0.15)]' : 'border-line'}`}
         />
         <button disabled={!myTurn || !text.trim() || sending} className="btn-primary flex items-center gap-2 rounded-2xl px-5">
           <IconSend width={18} /> <span className="hidden sm:inline">Enviar</span>
@@ -364,7 +364,7 @@ function AnswerBar({ room, me, meId, feed }: {
           <p
             key={shown.key}
             className={`slide-in inline-block rounded-lg px-3 py-1 ${
-              shown.tone === 'ok' ? 'bg-lime/10 text-lime' : shown.tone === 'bad' ? 'bg-danger/10 text-danger' : 'bg-violet/10 text-violet-soft'
+              shown.tone === 'ok' ? 'bg-ok/10 text-ok' : shown.tone === 'bad' ? 'bg-danger/10 text-danger' : 'bg-pop/10 text-pop-soft'
             }`}
           >
             {shown.text}

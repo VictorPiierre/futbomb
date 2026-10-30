@@ -59,7 +59,7 @@ export default function Bomb({ letter, turnEndsAt, duration, angle, passKey, exp
   const urgent = running && remaining <= URGENT_MS;
   const frac = running ? remaining / duration : 0;
   const secs = Math.ceil(remaining / 1000);
-  const ringColor = urgent ? '#ff4d5e' : frac < 0.5 ? '#facc15' : '#c4ff3a';
+  const ringColor = urgent ? '#ff4d5e' : frac < 0.5 ? '#ffd23f' : '#ff7a1a';
   const C = 2 * Math.PI * 88;
 
   return (
@@ -73,7 +73,7 @@ export default function Bomb({ letter, turnEndsAt, duration, angle, passKey, exp
           >
             <div className="absolute top-1/2 right-0 -translate-y-1/2">
               <svg width="26" height="30" viewBox="0 0 26 30">
-                <path d="M2 2 L24 15 L2 28 L8 15Z" fill={urgent ? '#ff4d5e' : '#c4ff3a'} />
+                <path d="M2 2 L24 15 L2 28 L8 15Z" fill={urgent ? '#ff4d5e' : '#ff7a1a'} />
               </svg>
             </div>
           </div>
@@ -84,9 +84,9 @@ export default function Bomb({ letter, turnEndsAt, duration, angle, passKey, exp
             <svg viewBox="0 0 200 200" className="h-full w-full overflow-visible">
               <defs>
                 <radialGradient id="ballShade" cx="38%" cy="32%" r="75%">
-                  <stop offset="0%" stopColor="#3a414c" />
-                  <stop offset="60%" stopColor="#1b1f25" />
-                  <stop offset="100%" stopColor="#0c0e11" />
+                  <stop offset="0%" stopColor="#4d3f63" />
+                  <stop offset="55%" stopColor="#211a2d" />
+                  <stop offset="100%" stopColor="#0d0913" />
                 </radialGradient>
                 <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
                   <feGaussianBlur stdDeviation="3" result="b" />
@@ -106,22 +106,19 @@ export default function Bomb({ letter, turnEndsAt, duration, angle, passKey, exp
               />
 
               {/* pavio */}
-              <path d="M128 58 C 140 40, 132 26, 150 18 S 176 18, 182 4" fill="none" stroke="#3b342b" strokeWidth="6" strokeLinecap="round" />
+              <path d="M128 58 C 140 40, 132 26, 150 18 S 176 18, 182 4" fill="none" stroke="#3d3047" strokeWidth="6" strokeLinecap="round" />
               <path ref={fuseRef} d="M128 58 C 140 40, 132 26, 150 18 S 176 18, 182 4" fill="none" stroke="#d6a86a" strokeWidth="6" strokeLinecap="round" />
-              <rect x="116" y="52" width="22" height="14" rx="4" transform="rotate(-38 127 59)" fill="#2b3038" stroke="#c4ff3a" strokeWidth="2" />
+              <rect x="116" y="52" width="22" height="14" rx="4" transform="rotate(-38 127 59)" fill="#3a2f4a" stroke="#ff7a1a" strokeWidth="2" />
               <g ref={sparkRef} style={{ opacity: 0 }}>
-                <circle className="spark" r="9" fill="#ffd84a" opacity="0.5" />
-                <circle className="spark" r="5" fill="#fff6c2" />
+                <circle className="spark" r="10" fill="#ff7a1a" opacity="0.45" />
+                <circle className="spark" r="5" fill="#ffd23f" />
                 <path d="M-12 0H12M0-12V12M-8-8L8 8M-8 8L8-8" stroke="#ffb02e" strokeWidth="1.6" />
               </g>
 
-              {/* bola */}
-              <circle cx="100" cy="108" r="66" fill="url(#ballShade)" stroke={urgent ? '#ff4d5e' : '#c4ff3a'} strokeWidth="3" />
-              <g stroke="#c4ff3a" strokeOpacity="0.28" strokeWidth="2.5" fill="none">
-                <path d="M100 42 v14 M42 92 l14 4 M158 92 l-14 4 M64 160 l9 -11 M136 160 l-9 -11" />
-                <path d="M100 56 L144 96 L127 149 H73 L56 96 Z" />
-              </g>
-              <ellipse cx="78" cy="78" rx="18" ry="10" fill="#ffffff" opacity="0.06" transform="rotate(-30 78 78)" />
+              {/* bomba */}
+              <circle cx="100" cy="108" r="66" fill="url(#ballShade)" stroke={urgent ? '#ff4d5e' : '#ff7a1a'} strokeWidth="3" />
+              <ellipse cx="74" cy="80" rx="20" ry="11" fill="#ffffff" opacity="0.14" transform="rotate(-35 74 80)" />
+              <circle cx="62" cy="98" r="4" fill="#ffffff" opacity="0.1" />
               <text
                 key={letter}
                 x="100" y="110" textAnchor="middle" dominantBaseline="central"
@@ -137,7 +134,7 @@ export default function Bomb({ letter, turnEndsAt, duration, angle, passKey, exp
 
       <div
         className={`mt-1 font-display text-3xl tabular-nums transition-colors sm:text-4xl ${
-          urgent ? 'text-danger' : running ? 'text-lime' : 'text-muted'
+          urgent ? 'text-danger' : running ? 'text-fire' : 'text-muted'
         }`}
       >
         00:{String(running ? secs : 0).padStart(2, '0')}

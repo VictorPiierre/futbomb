@@ -64,9 +64,9 @@ export function saveSession(s: Session | null) {
 
 export function loadProfile(): { name: string; avatar: string } {
   try {
-    return { name: '', avatar: '⚽', ...JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '{}') };
+    return { name: '', avatar: '💣', ...JSON.parse(localStorage.getItem(PROFILE_KEY) ?? '{}') };
   } catch {
-    return { name: '', avatar: '⚽' };
+    return { name: '', avatar: '💣' };
   }
 }
 export function saveProfile(p: { name: string; avatar: string }) {

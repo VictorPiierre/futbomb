@@ -1,4 +1,4 @@
-const RINGS = ['#c4ff3a', '#8b5cf6', '#38bdf8', '#f472b6', '#fb923c', '#facc15'];
+const RINGS = ['#ff7a1a', '#ff3d7f', '#ffd23f', '#3ddc97', '#38bdf8', '#b48cff'];
 
 export function colorFor(id: string) {
   let h = 0;

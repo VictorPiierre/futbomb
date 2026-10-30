@@ -21,9 +21,9 @@ export default function Victory({ room, meId, isHost }: { room: PublicRoom; meId
   return (
     <div className="fixed inset-0 z-40 grid place-items-center overflow-y-auto bg-ink/85 p-4 backdrop-blur-md">
       <Confetti />
-      <div className="pop-in relative w-full max-w-md rounded-3xl border border-lime/30 bg-panel p-6 text-center shadow-[0_0_80px_-20px_rgb(196_255_58/0.5)]">
+      <div className="pop-in relative w-full max-w-md rounded-3xl border border-fire/30 bg-panel p-6 text-center shadow-[0_0_80px_-20px_rgb(255_122_26/0.45)]">
         <div className="text-5xl">🏆</div>
-        <p className="mt-2 font-display text-2xl text-lime sm:text-3xl">CAMPEÃO DO FUTBOMB!</p>
+        <p className="mt-2 font-display text-2xl text-fire sm:text-3xl">CAMPEÃO DO PAVIO CURTO!</p>
         {winner ? (
           <div className="mt-5 flex flex-col items-center">
             <div className="turn-glow rounded-full">
@@ -43,7 +43,7 @@ export default function Victory({ room, meId, isHost }: { room: PublicRoom; meId
           {room.ranking?.map((r) => (
             <li
               key={r.playerId}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2 ${r.place === 1 ? 'bg-lime/10' : 'bg-panel-2'} ${r.playerId === meId ? 'ring-1 ring-violet/60' : ''}`}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2 ${r.place === 1 ? 'bg-fire/10' : 'bg-panel-2'} ${r.playerId === meId ? 'ring-1 ring-pop/60' : ''}`}
             >
               <span className="w-7 text-center text-lg">{MEDALS[r.place - 1] ?? `${r.place}º`}</span>
               <Avatar emoji={r.avatar} id={r.playerId} size={32} dim={r.place > 1} />
@@ -87,7 +87,7 @@ function Confetti() {
     };
     resize();
     window.addEventListener('resize', resize);
-    const colors = ['#c4ff3a', '#8b5cf6', '#ffffff', '#facc15', '#38bdf8', '#f472b6'];
+    const colors = ['#ff7a1a', '#ff3d7f', '#ffffff', '#ffd23f', '#3ddc97', '#38bdf8'];
     const pieces = Array.from({ length: 160 }, () => ({
       x: Math.random() * innerWidth,
       y: -20 - Math.random() * innerHeight * 0.8,

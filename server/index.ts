@@ -177,7 +177,7 @@ setInterval(() => {
 }, 60_000).unref();
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`⚽💣 FutBomb rodando em http://localhost:${PORT}`);
+  console.log(`💣 Pavio Curto rodando em http://localhost:${PORT}`);
   console.log(`   Banco: ${Object.entries(NAME_INDEXES).map(([t, idx]) => `${t} ${idx.entities.length}`).join(', ')}`);
   if (!fs.existsSync(CLIENT_DIST)) console.log('   (modo dev: abra o front-end em http://localhost:5173)');
 });

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { AVATARS } from '../../../shared/types';
-import { BallBomb, Logo } from './Icons';
+import { BombMark, Logo } from './Icons';
 
 interface Props {
   initialCode: string;
@@ -42,7 +42,7 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
       <div className="pop-in w-full max-w-md">
         <div className="mb-8 flex flex-col items-center text-center">
           <Logo size="lg" />
-          <p className="mt-3 text-muted">A bomba está com você. Diga um animal, uma cor, um famoso, um craque… antes que ela exploda!</p>
+          <p className="mt-3 text-muted">A bomba está com você! Diga um animal, uma cor, um filme, um famoso… antes que o pavio acabe.</p>
         </div>
 
         <form onSubmit={submitJoin} className="glass rounded-3xl p-5 shadow-2xl shadow-black/40 sm:p-6">
@@ -52,7 +52,7 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
             onChange={(e) => setName(e.target.value.slice(0, 16))}
             placeholder="Ex.: Victor"
             autoFocus={!name}
-            className="w-full rounded-xl border border-line bg-panel-2 px-4 py-3 text-lg font-semibold outline-none transition focus:border-lime/70 focus:ring-4 focus:ring-lime/10"
+            className="w-full rounded-xl border border-line bg-panel-2 px-4 py-3 text-lg font-semibold outline-none transition focus:border-fire/70 focus:ring-4 focus:ring-fire/10"
           />
 
           <label className="mt-5 mb-2 block text-xs font-semibold tracking-wider text-muted uppercase">Avatar</label>
@@ -64,7 +64,7 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
                 onClick={() => setAvatar(a)}
                 aria-label={`Avatar ${a}`}
                 className={`aspect-square rounded-full text-xl transition ${
-                  avatar === a ? 'scale-110 bg-lime/20 ring-2 ring-lime' : 'bg-panel-2 hover:bg-line'
+                  avatar === a ? 'scale-110 bg-fire/20 ring-2 ring-fire' : 'bg-panel-2 hover:bg-line'
                 }`}
               >
                 {a}
@@ -74,8 +74,8 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
 
           {invited ? (
             <>
-              <div className="mt-6 rounded-xl border border-violet/40 bg-violet/10 px-4 py-3 text-sm">
-                Você foi convidado para a sala <b className="font-display text-violet-soft">#{initialCode}</b>
+              <div className="mt-6 rounded-xl border border-pop/40 bg-pop/10 px-4 py-3 text-sm">
+                Você foi convidado para a sala <b className="font-display text-pop-soft">#{initialCode}</b>
               </div>
               <button disabled={busy || !connected} className="btn-primary mt-4 w-full">
                 Entrar na sala
@@ -107,7 +107,7 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/[^a-zA-Z]/g, '').slice(0, 4).toUpperCase())}
                   placeholder="ABCD"
-                  className="w-0 flex-1 rounded-xl border border-line bg-panel-2 px-4 py-3 text-center font-display text-xl tracking-[0.4em] uppercase outline-none focus:border-violet/70 focus:ring-4 focus:ring-violet/15"
+                  className="w-0 flex-1 rounded-xl border border-line bg-panel-2 px-4 py-3 text-center font-display text-xl tracking-[0.4em] uppercase outline-none focus:border-pop/70 focus:ring-4 focus:ring-pop/15"
                 />
                 <button disabled={busy || !connected} className="btn-secondary px-5">
                   Entrar em sala
@@ -126,7 +126,7 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
           <Rule n="3" text="Não deixe a bomba explodir" />
         </div>
       </div>
-      <BallBomb className="pointer-events-none fixed -right-16 -bottom-16 h-64 w-64 opacity-[0.04]" />
+      <BombMark className="pointer-events-none fixed -right-16 -bottom-16 h-64 w-64 opacity-[0.04]" />
     </div>
   );
 }
@@ -134,7 +134,7 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
 function Rule({ n, text }: { n: string; text: string }) {
   return (
     <div className="rounded-2xl border border-line/60 bg-panel/50 p-3">
-      <div className="font-display text-lg text-lime">{n}</div>
+      <div className="font-display text-lg text-fire">{n}</div>
       {text}
     </div>
   );

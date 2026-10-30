@@ -42,11 +42,11 @@ export default function Lobby({ room, meId, isHost, onCopy }: Props) {
         <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {slots.map((p, i) =>
             p ? (
-              <div key={p.id} className={`pop-in flex flex-col items-center gap-2 rounded-2xl border p-4 ${p.id === meId ? 'border-lime/50 bg-lime/5' : 'border-line bg-panel/60'}`}>
+              <div key={p.id} className={`pop-in flex flex-col items-center gap-2 rounded-2xl border p-4 ${p.id === meId ? 'border-fire/50 bg-fire/5' : 'border-line bg-panel/60'}`}>
                 <div className="relative">
                   <Avatar emoji={p.avatar} id={p.id} size={64} dim={!p.connected} />
                   {p.id === room.hostId && (
-                    <span className="absolute -top-2 -right-2 grid h-6 w-6 place-items-center rounded-full bg-violet text-white" title="Anfitrião">
+                    <span className="absolute -top-2 -right-2 grid h-6 w-6 place-items-center rounded-full bg-pop text-white" title="Anfitrião">
                       <IconCrown width={13} />
                     </span>
                   )}
@@ -92,8 +92,8 @@ export default function Lobby({ room, meId, isHost, onCopy }: Props) {
           )}
         </div>
 
-        <div className="mt-6 rounded-2xl border border-violet/30 bg-violet/10 p-4">
-          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-violet-soft">
+        <div className="mt-6 rounded-2xl border border-pop/30 bg-pop/10 p-4">
+          <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-pop-soft">
             <IconLink width={16} /> Convide seus amigos
           </p>
           <div className="flex gap-2">
@@ -103,7 +103,7 @@ export default function Lobby({ room, meId, isHost, onCopy }: Props) {
             </button>
           </div>
           <p className="mt-2 text-xs text-muted">
-            Ou passe o código <b className="font-display text-violet-soft">{room.code}</b>
+            Ou passe o código <b className="font-display text-pop-soft">{room.code}</b>
           </p>
         </div>
       </section>
@@ -140,7 +140,7 @@ export function SettingsPanel({ room, editable }: { room: PublicRoom; editable: 
     <div className="space-y-5">
       <Field label="Tema">
         <div className="grid grid-cols-3 gap-2">
-          {[...THEME_IDS.map((id) => [id, THEMES[id].icon, THEMES[id].short] as const), ['mixed', MIXED_THEME.icon, MIXED_THEME.short] as const].map(
+          {[['mixed', MIXED_THEME.icon, MIXED_THEME.short] as const, ...THEME_IDS.map((id) => [id, THEMES[id].icon, THEMES[id].short] as const)].map(
             ([value, icon, label]) => (
               <button
                 key={value}

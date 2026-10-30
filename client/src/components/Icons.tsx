@@ -34,25 +34,33 @@ export const IconLink = (p: P) => (
 export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
   const big = size === 'lg';
   return (
-    <div className={`flex items-center gap-2 ${big ? 'gap-3' : ''}`}>
-      <BallBomb className={big ? 'h-16 w-16' : 'h-8 w-8'} />
-      <span className={`font-display leading-none ${big ? 'text-5xl sm:text-6xl' : 'text-xl'}`}>
-        <span className="text-white">FUT</span>
-        <span className="text-lime">BOMB</span>
+    <div className={`flex items-center ${big ? 'gap-3' : 'gap-2'}`}>
+      <BombMark className={big ? 'h-16 w-16 sm:h-20 sm:w-20' : 'h-9 w-9'} />
+      <span className={`font-display leading-[0.9] ${big ? 'title-stroke text-5xl sm:text-7xl' : 'text-xl'}`}>
+        <span className="text-white">Pavio</span>{big ? <br /> : ' '}
+        <span className="text-fire">Curto</span>
       </span>
     </div>
   );
 }
 
-/** Bola-bomba usada no logo. */
-export function BallBomb({ className = '' }: { className?: string }) {
+/** Marca: bomba de desenho com pavio aceso. */
+export function BombMark({ className = '' }: { className?: string }) {
   return (
     <svg viewBox="0 0 64 64" className={className} aria-hidden>
-      <path d="M44 14 C48 8 54 8 57 4" stroke="#c9a06a" strokeWidth="3" fill="none" strokeLinecap="round" />
-      <circle cx="57.5" cy="4.5" r="3.5" fill="#ffd84a" />
-      <circle cx="30" cy="36" r="24" fill="#20242b" stroke="#c4ff3a" strokeWidth="3" />
-      <path d="M30 24 l9 6.5 -3.4 10.5 h-11.2 L21 30.5Z" fill="#c4ff3a" />
-      <path d="M30 24v-10M39 30.5l9.5-3M35.6 41l6 8M24.4 41l-6 8M21 30.5l-9.5-3" stroke="#c4ff3a" strokeWidth="2.5" />
+      <defs>
+        <radialGradient id="bm-body" cx="35%" cy="35%" r="70%">
+          <stop offset="0%" stopColor="#4a3d5e" />
+          <stop offset="55%" stopColor="#221a2e" />
+          <stop offset="100%" stopColor="#0f0b16" />
+        </radialGradient>
+      </defs>
+      <path d="M41 17 C44 10 50 11 52 6" stroke="#d8a56b" strokeWidth="3" fill="none" strokeLinecap="round" />
+      <path d="M52 1.5 l1.4 3.2 3.4 .4 -2.6 2.2 .8 3.3 -3-1.8 -3 1.8 .8-3.3 -2.6-2.2 3.4-.4Z" fill="#ffd23f" />
+      <circle cx="52" cy="6" r="2.2" fill="#ff7a1a" />
+      <rect x="33" y="14" width="12" height="9" rx="2.5" transform="rotate(35 39 18.5)" fill="#3a2f4a" stroke="#ff7a1a" strokeWidth="2" />
+      <circle cx="28" cy="38" r="22" fill="url(#bm-body)" stroke="#ff7a1a" strokeWidth="2.5" />
+      <ellipse cx="20" cy="29" rx="6" ry="3.5" transform="rotate(-35 20 29)" fill="#fff" opacity="0.22" />
     </svg>
   );
 }

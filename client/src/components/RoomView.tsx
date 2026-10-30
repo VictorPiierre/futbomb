@@ -43,16 +43,16 @@ export default function RoomView({ room, meId, connected, onLeave }: Props) {
   });
 
   useEffect(() => {
-    document.title = room.phase === 'playing' && room.game ? `Letra ${room.game.letter} · FutBomb` : `Sala #${room.code} · FutBomb`;
+    document.title = room.phase === 'playing' && room.game ? `Letra ${room.game.letter} · Pavio Curto` : `Sala #${room.code} · Pavio Curto`;
   }, [room.phase, room.game?.letter, room.code]);
 
   const me = room.players.find((p) => p.id === meId);
   const isHost = room.hostId === meId;
   const status =
     room.phase === 'playing'
-      ? { label: 'AO VIVO', cls: 'bg-lime/15 text-lime border-lime/30' }
+      ? { label: 'AO VIVO', cls: 'bg-fire/15 text-fire border-fire/30' }
       : room.phase === 'ended'
-        ? { label: 'FIM DE JOGO', cls: 'bg-violet/15 text-violet-soft border-violet/30' }
+        ? { label: 'FIM DE JOGO', cls: 'bg-pop/15 text-pop-soft border-pop/30' }
         : { label: 'SALA DE ESPERA', cls: 'bg-panel-2 text-muted border-line' };
 
   return (
@@ -62,11 +62,11 @@ export default function RoomView({ room, meId, connected, onLeave }: Props) {
           <Logo />
           <div className="mx-auto hidden min-w-0 flex-col items-center leading-tight sm:flex">
             <span className="truncate text-sm font-semibold">Sala de {room.hostName || '—'}</span>
-            <span className="font-display text-xs text-violet-soft">#{room.code}</span>
+            <span className="font-display text-xs text-pop-soft">#{room.code}</span>
           </div>
-          <span className="ml-auto font-display text-xs text-violet-soft sm:hidden">#{room.code}</span>
+          <span className="ml-auto font-display text-xs text-pop-soft sm:hidden">#{room.code}</span>
           <span className={`hidden rounded-full border px-2.5 py-1 text-[11px] font-bold tracking-wider sm:inline-block ${status.cls}`}>
-            {room.phase === 'playing' && <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-lime align-middle" />}
+            {room.phase === 'playing' && <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-fire align-middle" />}
             {status.label}
           </span>
           <div className="flex items-center gap-1.5">
@@ -130,7 +130,7 @@ export default function RoomView({ room, meId, connected, onLeave }: Props) {
       )}
 
       {toast && (
-        <div className="slide-in fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full bg-lime px-4 py-2 text-sm font-bold text-ink shadow-xl">
+        <div className="slide-in fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-full bg-fire px-4 py-2 text-sm font-bold text-ink shadow-xl">
           {toast}
         </div>
       )}

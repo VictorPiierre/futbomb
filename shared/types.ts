@@ -3,8 +3,6 @@
  * wordForms: aceita plural e feminino ("gatas" -> gato) para palavras comuns.
  */
 export const THEMES = {
-  players: { label: 'Jogadores de futebol', short: 'Jogadores', icon: '⚽', noun: 'jogador', article: 'um', wordForms: false, aliases: ['jogadores'] },
-  clubs: { label: 'Clubes de futebol', short: 'Clubes', icon: '🛡️', noun: 'clube', article: 'um', wordForms: false, aliases: ['clubes', 'times'] },
   animals: { label: 'Animais', short: 'Animais', icon: '🦁', noun: 'animal', article: 'um', wordForms: true, aliases: ['animais'] },
   objects: { label: 'Objetos', short: 'Objetos', icon: '🧸', noun: 'objeto', article: 'um', wordForms: true, aliases: ['objetos'] },
   foods: { label: 'Comidas e frutas', short: 'Comidas', icon: '🍎', noun: 'comida ou fruta', article: 'uma', wordForms: true, aliases: ['comidas', 'frutas'] },
@@ -20,6 +18,8 @@ export const THEMES = {
   shows: { label: 'Séries, novelas e desenhos', short: 'Séries', icon: '📺', noun: 'série, novela ou desenho', article: 'uma', wordForms: false, aliases: ['series', 'desenhos', 'novelas'] },
   sports: { label: 'Esportes', short: 'Esportes', icon: '🏅', noun: 'esporte', article: 'um', wordForms: true, aliases: ['esportes'] },
   body: { label: 'Partes do corpo', short: 'Corpo', icon: '🫀', noun: 'parte do corpo', article: 'uma', wordForms: true, aliases: ['corpo'] },
+  players: { label: 'Jogadores de futebol', short: 'Jogadores', icon: '⚽', noun: 'jogador', article: 'um', wordForms: false, aliases: ['jogadores'] },
+  clubs: { label: 'Clubes de futebol', short: 'Clubes', icon: '🛡️', noun: 'clube', article: 'um', wordForms: false, aliases: ['clubes', 'times'] },
   insults: { label: 'Xingamentos', short: 'Xingamentos', icon: '🤬', noun: 'xingamento', article: 'um', wordForms: true, aliases: ['xingamentos'] },
 } as const;
 
@@ -140,4 +140,4 @@ export interface AnswerResult {
   canonical?: string;
 }
 
-export const AVATARS = ['⚽', '🦁', '🐯', '🦅', '🐺', '🦊', '🐻', '🐲', '🦈', '🐝', '🔥', '⚡', '👑', '🧤', '🥅', '🏆'];
+export const AVATARS = ['💣', '🔥', '😎', '🤖', '👻', '🦊', '🐸', '🐙', '🦁', '🐼', '🦄', '👽', '🤠', '🍕', '⚡', '👑'];

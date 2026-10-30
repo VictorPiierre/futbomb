@@ -2,7 +2,7 @@
   "name": "futbomb",
   "version": "1.0.0",
   "private": true,
-  "description": "FutBomb — jogo multiplayer de conhecimento futebolístico em tempo real",
+  "description": "Pavio Curto — jogo multiplayer de palavras em tempo real",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n server,client -c green,magenta \"npm:dev:server\" \"npm:dev:client\"",
