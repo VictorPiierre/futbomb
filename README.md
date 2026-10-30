@@ -1,12 +1,14 @@
 # ⚽💣 FutBomb
 
-Jogo multiplayer em tempo real (2 a 4 jogadores) de conhecimento futebolístico.
-Uma letra é sorteada e, na sua vez, você precisa digitar um **jogador** ou **clube** real
-que comece com ela antes que a bomba exploda.
+Jogo multiplayer em tempo real (2 a 4 jogadores). Uma letra é sorteada e, na sua vez,
+você precisa digitar uma palavra do tema que comece com ela antes que a bomba exploda.
+
+Temas: ⚽ Jogadores de futebol · 🛡️ Clubes · 🦁 Animais · 🧸 Objetos · 🍎 Comidas e frutas ·
+🎨 Cores · 🌎 Países · ⭐ Famosos · 💼 Profissões · 🎲 **Surpresa** (o tema muda a cada volta).
 
 - Front-end: React + Vite + TypeScript + Tailwind CSS
 - Back-end: Node.js + Express + Socket.IO (cronômetro, turnos, vidas e validação **no servidor**)
-- Banco de nomes: `data/players.json` (~830 jogadores) e `data/clubs.json` (~460 clubes)
+- Banco de palavras: um arquivo por tema em `data/` (~2.300 entradas no total)
 
 ## Rodar localmente
 
@@ -81,9 +83,10 @@ Os links de convite usarão o domínio da Vercel (`https://seu-app.vercel.app/s/
 
 Variável do servidor: `PORT` (padrão 3000).
 
-## Banco de nomes
+## Banco de palavras
 
-Os arquivos `data/players.json` e `data/clubs.json` têm o formato:
+Cada tema tem seu arquivo em `data/`: `players`, `clubs`, `animals`, `objects`, `foods`,
+`colors`, `countries`, `famous` e `professions` (`.json`). Formato:
 
 ```json
 { "name": "Lionel Messi", "aliases": ["Messi", "Leo Messi", "La Pulga"] }
@@ -92,7 +95,11 @@ Os arquivos `data/players.json` e `data/clubs.json` têm o formato:
 A validação ignora maiúsculas, acentos e pontuação, aceita apelidos cadastrados,
 tolera um pequeno erro de digitação em nomes longos ("halland" → Erling Haaland) e,
 para clubes, ignora prefixos como "FC", "EC", "SC" ("Flamengo FC" → Flamengo).
+Nos temas de palavras comuns (animais, objetos, comidas, cores, profissões) também aceita plural
+e feminino ("gatas" → Gato, "leões" → Leão, "professora" → Professor).
 Nomes já usados na partida são recusados.
+
+Para criar um tema novo: adicione-o em `THEMES` (`shared/types.ts`) e crie `data/<id>.json`.
 
 ### Importar novos nomes
 
@@ -101,6 +108,7 @@ CSV (`nome,apelidos`, com apelidos separados por `|`) ou JSON:
 ```bash
 npm run import -- jogadores meus-jogadores.csv
 npm run import -- clubes meus-clubes.json
+npm run import -- animais meus-animais.csv
 ```
 
 Veja `data/exemplo-importacao.csv`. Nomes repetidos são mesclados (os apelidos novos são somados).
@@ -108,7 +116,7 @@ Use `--substituir` para trocar o banco inteiro. Reinicie o servidor depois de im
 
 ## Regras implementadas
 
-- Sala com código de 4 letras e link `/s/CODIGO`; anfitrião escolhe tema, tempo (5–30 s) e máximo de jogadores (2–4).
+- Sala com código de 4 letras e link `/s/CODIGO`; anfitrião escolhe tema (ou Surpresa), tempo (5–30 s) e máximo de jogadores (2–4).
 - Todos começam com 2 vidas; tempo esgotado = explosão e perda de vida; 0 vidas = eliminado (vira espectador).
 - Primeiro jogador sorteado; a mesma letra vale por uma volta inteira, depois outra é sorteada.
 - Letras difíceis (K, W, X, Y, Z, Q, U) só saem quando há nomes suficientes disponíveis.

@@ -1,9 +1,10 @@
 /**
- * Importa jogadores ou clubes para o banco de nomes (data/players.json | data/clubs.json).
+ * Importa nomes para o banco de um tema (data/<tema>.json).
  *
  * Uso:
  *   npm run import -- jogadores caminho/arquivo.csv
  *   npm run import -- clubes caminho/arquivo.json
+ *   npm run import -- animais caminho/arquivo.csv   (temas: jogadores, clubes, animais, objetos, comidas, cores, paises, famosos, profissoes)
  *   npm run import -- jogadores arquivo.csv --substituir   (troca o banco inteiro)
  *
  * CSV: uma entidade por linha -> nome,apelido1|apelido2|...
@@ -15,6 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalize } from '../shared/normalize.ts';
+import { THEMES, THEME_IDS } from '../shared/types.ts';
 
 export interface NameRecord {
   name: string;
@@ -22,10 +24,12 @@ export interface NameRecord {
 }
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const TARGETS: Record<string, string> = {
-  jogadores: 'players.json', players: 'players.json',
-  clubes: 'clubs.json', clubs: 'clubs.json',
-};
+// Aceita o id do tema (animals) ou o nome em português (animais, profissões...).
+const TARGETS: Record<string, string> = {};
+for (const id of THEME_IDS) {
+  TARGETS[id] = `${id}.json`;
+  for (const alias of THEMES[id].aliases) TARGETS[alias] = `${id}.json`;
+}
 
 function parseCsv(content: string): NameRecord[] {
   const out: NameRecord[] = [];
@@ -83,9 +87,10 @@ function dedupe(aliases: string[], name: string) {
 
 function main() {
   const [kind, file, ...flags] = process.argv.slice(2);
-  const target = TARGETS[kind?.toLowerCase() ?? ''];
+  const target = TARGETS[normalize(kind ?? '')];
   if (!target || !file) {
-    console.error('Uso: npm run import -- <jogadores|clubes> <arquivo.csv|arquivo.json> [--substituir]');
+    console.error(`Uso: npm run import -- <tema> <arquivo.csv|arquivo.json> [--substituir]
+Temas: ${Object.keys(TARGETS).join(', ')}`);
     process.exit(1);
   }
   const content = fs.readFileSync(path.resolve(file), 'utf8').replace(/^﻿/, '');

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MAX_PLAYERS, TURN_TIMES, type PublicRoom, type Settings } from '../../../shared/types';
+import { MAX_PLAYERS, MIXED_THEME, THEMES, THEME_IDS, TURN_TIMES, themeLabel, type PublicRoom, type Settings } from '../../../shared/types';
 import { emitAck, inviteLink, socket } from '../net';
 import Avatar, { Hearts } from './Avatar';
 import { IconCopy, IconCrown, IconLink } from './Icons';
@@ -139,22 +139,25 @@ export function SettingsPanel({ room, editable }: { room: PublicRoom; editable: 
   return (
     <div className="space-y-5">
       <Field label="Tema">
-        <div className="grid grid-cols-2 gap-2">
-          {([
-            ['players', '🧑‍🦱', 'Jogadores'],
-            ['clubs', '🛡️', 'Clubes'],
-          ] as const).map(([value, icon, label]) => (
-            <button
-              key={value}
-              disabled={!editable}
-              onClick={() => set({ theme: value })}
-              className={`chip flex flex-col items-center gap-1 py-3 ${s.theme === value ? 'chip-on' : editable ? 'hover:border-line hover:bg-line/40' : 'opacity-60'}`}
-            >
-              <span className="text-2xl">{icon}</span>
-              {label} de futebol
-            </button>
-          ))}
+        <div className="grid grid-cols-3 gap-2">
+          {[...THEME_IDS.map((id) => [id, THEMES[id].icon, THEMES[id].short] as const), ['mixed', MIXED_THEME.icon, MIXED_THEME.short] as const].map(
+            ([value, icon, label]) => (
+              <button
+                key={value}
+                disabled={!editable}
+                onClick={() => set({ theme: value })}
+                title={themeLabel(value)}
+                className={`chip flex flex-col items-center gap-0.5 px-1 py-2.5 text-xs ${s.theme === value ? 'chip-on' : editable ? 'hover:border-line hover:bg-line/40' : 'opacity-60'}`}
+              >
+                <span className="text-xl">{icon}</span>
+                {label}
+              </button>
+            ),
+          )}
         </div>
+        <p className="mt-2 text-xs text-muted">
+          {s.theme === 'mixed' ? '🎲 O tema muda a cada volta!' : `Tema: ${themeLabel(s.theme)}`}
+        </p>
       </Field>
       <Field label="Tempo por jogador">
         <div className="flex flex-wrap gap-2">

@@ -42,7 +42,7 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
       <div className="pop-in w-full max-w-md">
         <div className="mb-8 flex flex-col items-center text-center">
           <Logo size="lg" />
-          <p className="mt-3 text-muted">A bomba está com você. Diga um nome do futebol antes que ela exploda!</p>
+          <p className="mt-3 text-muted">A bomba está com você. Diga um animal, uma cor, um famoso, um craque… antes que ela exploda!</p>
         </div>
 
         <form onSubmit={submitJoin} className="glass rounded-3xl p-5 shadow-2xl shadow-black/40 sm:p-6">
@@ -122,7 +122,7 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
 
         <div className="mt-6 grid grid-cols-3 gap-3 text-center text-xs text-muted">
           <Rule n="1" text="Uma letra é sorteada" />
-          <Rule n="2" text="Diga um jogador ou clube real" />
+          <Rule n="2" text="Diga uma palavra do tema" />
           <Rule n="3" text="Não deixe a bomba explodir" />
         </div>
       </div>

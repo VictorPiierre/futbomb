@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import type { AnswerResult, GameFx, PublicPlayer, PublicRoom } from '../../../shared/types';
+import { THEMES, themePrompt, type AnswerResult, type GameFx, type PublicPlayer, type PublicRoom } from '../../../shared/types';
 import { emitAck, socket, useSocketEvent } from '../net';
 import { sfx } from '../sound';
 import Avatar, { Hearts } from './Avatar';
@@ -39,7 +39,9 @@ export default function Arena({ room, meId, me }: Props) {
   const angles = useMemo(() => seatAngles(players.length), [players.length]);
   const currentIdx = players.findIndex((p) => p.id === game.currentPlayerId);
   const current = players[currentIdx];
-  const themeWord = room.settings.theme === 'players' ? 'jogador' : 'clube';
+  const theme = THEMES[game.theme];
+  const prompt = themePrompt(game.theme);
+  const mixed = room.settings.theme === 'mixed';
 
   const [typing, setTyping] = useState<Record<string, string>>({});
   const [flashes, setFlashes] = useState<Record<string, Flash>>({});
@@ -84,7 +86,7 @@ export default function Arena({ room, meId, me }: Props) {
         setTimeout(() => sfx.eliminated(), 450);
         break;
       case 'letter':
-        if (fx.round > 1) setFeed({ key, text: `Nova volta! Letra ${fx.letter}`, tone: 'info' });
+        if (fx.round > 1) setFeed({ key, text: `Nova volta! ${THEMES[fx.theme].icon} ${THEMES[fx.theme].short} · Letra ${fx.letter}`, tone: 'info' });
         break;
       case 'turn':
         setTyping({});
@@ -101,7 +103,10 @@ export default function Arena({ room, meId, me }: Props) {
         {/* letra da volta */}
         <div className="mb-2 text-center">
           <p className="text-xs font-semibold tracking-[0.2em] text-muted uppercase">
-            Categoria: {room.settings.theme === 'players' ? 'Jogadores' : 'Clubes'} · Volta {game.round}
+            {mixed ? '🎲 Tema da volta' : 'Categoria'} · Volta {game.round}
+          </p>
+          <p key={`${game.round}-${game.theme}`} className="letter-in text-lg font-bold text-violet-soft">
+            {theme.icon} {theme.label}
           </p>
           <p key={game.letter} className="letter-in font-display text-4xl leading-tight text-lime sm:text-5xl">
             LETRA {game.letter}
@@ -153,10 +158,10 @@ export default function Arena({ room, meId, me }: Props) {
         <p className="mt-2 text-center font-semibold">
           {game.status === 'turn' && current ? (
             current.id === meId ? (
-              <span className="text-lime">Sua vez! Digite um {themeWord} que começa com {game.letter}</span>
+              <span className="text-lime">Sua vez! Digite {prompt} que começa com {game.letter}</span>
             ) : (
               <>
-                Vez de <span className="text-lime">{current.name}</span> — {themeWord} com {game.letter}
+                Vez de <span className="text-lime">{current.name}</span> — {theme.noun} com {game.letter}
               </>
             )
           ) : (
@@ -327,7 +332,7 @@ function AnswerBar({ room, me, meId, feed }: {
     : me.eliminated
       ? 'Você foi eliminado — acompanhe como espectador'
       : myTurn
-        ? `Ex.: ${room.settings.theme === 'players' ? 'um jogador' : 'um clube'} com ${game.letter}… e aperte Enter`
+        ? `Digite ${themePrompt(game.theme)} com ${game.letter}… e aperte Enter`
         : 'Aguarde sua vez…';
 
   const shown = msg && (!feed || msg.key >= feed.key) ? msg : feed;

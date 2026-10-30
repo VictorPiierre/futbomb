@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalize } from '../shared/normalize.ts';
-import type { Theme } from '../shared/types.ts';
+import { THEMES, THEME_IDS, type Theme } from '../shared/types.ts';
 
 const DATA_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
 
@@ -34,6 +34,29 @@ function clubVariants(key: string): string[] {
   return stripped !== key && stripped.length >= 3 ? [stripped] : [];
 }
 
+function singular(w: string) {
+  if (w.length < 4) return w;
+  if (/(oes|aes)$/.test(w)) return w.slice(0, -3) + 'ao';
+  if (/[aeo]is$/.test(w)) return w.slice(0, -2) + 'l';
+  if (w.endsWith('ns')) return w.slice(0, -2) + 'm';
+  if (/[rzs]es$/.test(w)) return w.slice(0, -2);
+  if (w.endsWith('s')) return w.slice(0, -1);
+  return w;
+}
+
+function masculine(w: string) {
+  if (w.length < 4) return w;
+  if (w.endsWith('ora')) return w.slice(0, -1);
+  if (w.endsWith('a')) return w.slice(0, -1) + 'o';
+  return w;
+}
+
+function wordVariants(key: string): string[] {
+  const words = key.split(' ');
+  const forms = [singular, masculine, (w: string) => masculine(singular(w))];
+  return [...new Set(forms.map((f) => words.map(f).join(' ')))].filter((v) => v !== key);
+}
+
 function levenshtein(a: string, b: string, max: number): number {
   if (Math.abs(a.length - b.length) > max) return max + 1;
   let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
@@ -58,8 +81,10 @@ export class NameIndex {
   constructor(file: string, private theme: Theme) {
     const records: { name: string; aliases?: string[] }[] = JSON.parse(fs.readFileSync(file, 'utf8'));
     for (const rec of records) {
-      const id = normalize(rec.name);
-      if (!id) continue;
+      const base = normalize(rec.name);
+      if (!base) continue;
+      // Prefixo do tema: "laranja" cor e "laranja" fruta são respostas diferentes.
+      const id = `${theme}:${base}`;
       const entity: Entity = { id, name: rec.name, letters: new Set() };
       const keys = new Set<string>();
       for (const n of [rec.name, ...(rec.aliases ?? [])]) {
@@ -99,6 +124,14 @@ export class NameIndex {
     const exact = this.byKey.get(typed) ?? this.byKey.get(key);
     if (exact) return pick(exact, used);
 
+    // Plural e feminino: "gatas" -> gato, "leões" -> leão, "professora" -> professor.
+    if (THEMES[this.theme].wordForms) {
+      for (const v of wordVariants(typed)) {
+        const hit = this.byKey.get(v);
+        if (hit) return pick(hit, used);
+      }
+    }
+
     // Tolerância a pequenos erros de digitação em nomes mais longos.
     const max = key.length >= 10 ? 2 : key.length >= 5 ? 1 : 0;
     if (max === 0) return { status: 'unknown' };
@@ -127,7 +160,6 @@ function pick(list: Entity[], used: Set<string>): LookupResult {
   return free ? { status: 'ok', entity: free } : { status: 'used', entity: list[0] };
 }
 
-export const NAME_INDEXES: Record<Theme, NameIndex> = {
-  players: new NameIndex(path.join(DATA_DIR, 'players.json'), 'players'),
-  clubs: new NameIndex(path.join(DATA_DIR, 'clubs.json'), 'clubs'),
-};
+export const NAME_INDEXES = Object.fromEntries(
+  THEME_IDS.map((t) => [t, new NameIndex(path.join(DATA_DIR, `${t}.json`), t)]),
+) as Record<Theme, NameIndex>;

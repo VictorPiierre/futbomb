@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import type { Server } from 'socket.io';
 import { normalize } from '../shared/normalize.ts';
 import {
-  START_LIVES, MAX_PLAYERS, TURN_TIMES,
+  START_LIVES, MAX_PLAYERS, TURN_TIMES, THEMES, THEME_IDS, type Theme,
   type AnswerResult, type GameFx, type HistoryItem, type PublicRoom, type Settings,
 } from '../shared/types.ts';
 import { NAME_INDEXES } from './names.ts';
@@ -34,6 +34,8 @@ interface Member {
 }
 
 interface GameState {
+  theme: Theme;
+  lastTheme: Theme | null;
   letter: string;
   lastLetter: string;
   round: number;
@@ -177,7 +179,7 @@ export class Room {
   updateSettings(by: string, patch: Partial<Settings>) {
     if (by !== this.hostId || this.phase !== 'lobby') return;
     const s = { ...this.settings };
-    if (patch.theme === 'players' || patch.theme === 'clubs') s.theme = patch.theme;
+    if (patch.theme === 'mixed' || (typeof patch.theme === 'string' && patch.theme in THEMES)) s.theme = patch.theme;
     if (TURN_TIMES.includes(patch.turnTime as never)) s.turnTime = patch.turnTime!;
     if (MAX_PLAYERS.includes(patch.maxPlayers as never) && patch.maxPlayers! >= this.players.length) {
       s.maxPlayers = patch.maxPlayers!;
@@ -208,6 +210,7 @@ export class Room {
     this.winnerId = null;
     this.ranking = null;
     this.game = {
+      theme: 'players', lastTheme: null,
       letter: '', lastLetter: '', round: 0, queue: [], currentId: null, status: 'turn',
       turnEndsAt: null, used: new Set(), history: [], historySeq: 0, eliminatedCount: 0,
     };
@@ -224,16 +227,34 @@ export class Room {
     g.queue = [...active.slice(idx), ...active.slice(0, idx)].map((p) => p.id);
     g.round++;
     g.lastLetter = g.letter;
-    g.letter = this.drawLetter(active.length);
-    this.fx({ type: 'letter', letter: g.letter, round: g.round });
+    g.lastTheme = g.round > 1 ? g.theme : null;
+    g.theme = this.drawTheme(active.length);
+    g.letter = this.drawLetter(g.theme, active.length);
+    this.fx({ type: 'letter', letter: g.letter, round: g.round, theme: g.theme });
     this.beginTurn(g.queue.shift()!);
   }
 
-  private drawLetter(activeCount: number): string {
+  /** No modo Surpresa sorteia um tema diferente do anterior que ainda tenha letras jogáveis. */
+  private drawTheme(activeCount: number): Theme {
+    if (this.settings.theme !== 'mixed') return this.settings.theme;
     const g = this.game!;
-    const index = NAME_INDEXES[this.settings.theme];
+    const playable = THEME_IDS.filter((t) => t !== g.lastTheme && this.eligibleLetters(t, activeCount).length > 0);
+    const pool = playable.length ? playable : THEME_IDS;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  private eligibleLetters(theme: Theme, activeCount: number) {
+    const index = NAME_INDEXES[theme];
+    return LETTERS.map((l) => ({ l, n: index.available(l, this.game!.used) })).filter(
+      ({ l, n }) => n >= activeCount * (HARD_LETTERS.has(l) ? 6 : 2),
+    );
+  }
+
+  private drawLetter(theme: Theme, activeCount: number): string {
+    const g = this.game!;
+    const index = NAME_INDEXES[theme];
     const counts = LETTERS.map((l) => ({ l, n: index.available(l, g.used) }));
-    const eligible = counts.filter(({ l, n }) => n >= activeCount * (HARD_LETTERS.has(l) ? 6 : 2));
+    const eligible = this.eligibleLetters(theme, activeCount);
     const fresh = eligible.filter(({ l }) => l !== g.lastLetter);
     const pool = fresh.length ? fresh : eligible.length ? eligible : [counts.sort((a, b) => b.n - a.n)[0]];
     return pool[Math.floor(Math.random() * pool.length)].l;
@@ -314,11 +335,11 @@ export class Room {
 
     const text = String(raw ?? '').trim().slice(0, 60);
     const key = normalize(text);
-    const kind = this.settings.theme === 'players' ? 'jogador' : 'clube';
+    const kind = THEMES[g.theme].noun;
     if (!key) return { ok: false, reason: 'Digite uma resposta.' };
     if (key[0].toUpperCase() !== g.letter) return { ok: false, reason: `Precisa começar com a letra ${g.letter}.` };
 
-    const result = NAME_INDEXES[this.settings.theme].lookup(text, g.used);
+    const result = NAME_INDEXES[g.theme].lookup(text, g.used);
     if (result.status === 'unknown') return { ok: false, reason: `"${text}" não foi reconhecido como ${kind}. Tente outro!` };
     if (result.status === 'used') return { ok: false, reason: `${result.entity.name} já foi usado nesta partida.` };
 
@@ -416,7 +437,7 @@ export class Room {
         .filter((m) => m.role === 'spectator')
         .map((m) => ({ id: m.id, name: m.name, avatar: m.avatar, connected: m.connected })),
       game: g && {
-        letter: g.letter, round: g.round, currentPlayerId: g.currentId, status: g.status,
+        theme: g.theme, letter: g.letter, round: g.round, currentPlayerId: g.currentId, status: g.status,
         turnEndsAt: g.turnEndsAt, turnDuration: this.settings.turnTime * 1000, history: g.history.slice(0, 12),
       },
       ranking: this.ranking,
