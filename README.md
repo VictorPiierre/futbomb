@@ -109,11 +109,12 @@ Variável do servidor: `PORT` (padrão 3000).
 São duas camadas por tema:
 
 - **`data/<tema>.json`** — banco principal, curado à mão. É o que decide quais letras podem ser sorteadas.
-- **`data/extra/<tema>.json`** — listas grandes só para *reconhecer* respostas (≈150 mil entradas):
-  - nomes do Censo/IBGE (via brasil.io, ~100 mil nomes);
+- **`data/extra/<tema>.json`** — listas grandes só para *reconhecer* respostas (≈75 mil entradas):
+  - nomes do Censo/IBGE (via brasil.io) que pelo menos 200 pessoas têm (~25 mil); nomes compostos valem se cada parte for conhecida;
   - todos os municípios do IBGE + cidades do mundo (Wikidata);
   - famosos, filmes, séries, jogos, marcas, jogadores e clubes (Wikidata, CC0);
-  - animais, comidas, objetos, profissões, partes do corpo, cores e esportes (Wiktionary via kaikki.org).
+  - animais, comidas, objetos, profissões, partes do corpo, cores e esportes (Wiktionary via kaikki.org),
+    só palavras de uso real (aparecem em legendas pt-BR) e sem sentidos arcaicos ou raros.
 
 Para atualizar as listas extra:
 

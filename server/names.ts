@@ -148,6 +148,17 @@ export class NameIndex {
       }
     }
 
+    // Nomes compostos ("Enzo Gabriel", "Maria Eduarda"): vale se cada parte for um nome conhecido.
+    if (this.theme === 'names' && typed.includes(' ')) {
+      const parts = typed.split(' ').filter((w) => !['de', 'da', 'do', 'dos', 'das', 'e'].includes(w));
+      if (parts.length >= 2 && parts.length <= 3 && parts.every((w) => this.byKey.has(w))) {
+        const id = `names:${typed}`;
+        const name = text.trim().toLowerCase().replace(/\s+/g, ' ').replace(/(^| )(\p{L})/gu, (_m, sp, c) => sp + c.toUpperCase()).replace(/ (D[aeo]s?|E) /g, (m) => m.toLowerCase());
+        const entity: Entity = { id, name, letters: new Set([typed[0].toUpperCase()]), core: false };
+        return used.has(id) ? { status: 'used', entity } : { status: 'ok', entity };
+      }
+    }
+
     // Tolerância a pequenos erros de digitação em nomes mais longos.
     const max = key.length >= 10 ? 2 : key.length >= 5 ? 1 : 0;
     if (max === 0) return { status: 'unknown' };

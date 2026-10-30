@@ -3,6 +3,12 @@
  *  - nomes.csv.gz     — nomes do Censo/IBGE via brasil.io (https://data.brasil.io/dataset/genero-nomes/nomes.csv.gz)
  *  - municipios.json  — municípios do IBGE (https://servicodados.ibge.gov.br/api/v1/localidades/municipios)
  *  - kaikki-pt.jsonl  — Wiktionary em JSON (https://kaikki.org/dictionary/Portuguese/)
+ *  - pt_br_full.txt   — frequência de palavras em legendas pt-BR
+ *                       (https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/pt_br/pt_br_full.txt)
+ *
+ * Filtros de qualidade: do dicionário só entram palavras usadas de verdade (aparecem pelo menos
+ * MIN_FREQ vezes nas legendas) e sentidos que não são arcaicos/obsoletos/raros; dos nomes, só os
+ * que pelo menos MIN_NAME_PEOPLE pessoas têm no Brasil.
  *
  * Uso: npm run build:extra -- <pasta com os 3 arquivos>
  * Os arquivos extra só ampliam o reconhecimento; o sorteio de letras usa o banco principal.
@@ -17,6 +23,26 @@ import { mergeRecords, type NameRecord } from './import-names.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'data', 'extra');
+const MIN_FREQ = 5;
+const MIN_NAME_PEOPLE = 200;
+const SKIP_TAGS = new Set(['archaic', 'obsolete', 'rare', 'dated', 'historical', 'nonstandard', 'misspelling']);
+// Conectivos que não precisam passar no filtro de frequência ("baleia-franca", "pé de moleque").
+const CONNECTORS = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'a', 'o', 'em', 'com']);
+
+let freq = new Map<string, number>();
+function loadFreq(file: string) {
+  freq = new Map();
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    const [w, n] = line.trim().split(' ');
+    if (w) freq.set(w.toLowerCase(), Number(n));
+  }
+}
+
+/** Todas as partes "de verdade" da expressão precisam ser palavras usadas no dia a dia. */
+function isCommon(term: string) {
+  const parts = term.toLowerCase().split(/[\s-]+/).filter((w) => w && !CONNECTORS.has(w));
+  return parts.length > 0 && parts.every((w) => w.length <= 2 || (freq.get(w) ?? 0) >= MIN_FREQ);
+}
 
 // Categorias do Wiktionary (campo "orig", sem o prefixo pt:) -> tema.
 const ANIMAL_CATS =
@@ -26,7 +52,7 @@ const FOOD_CATS =
 const OBJECT_CATS =
   /^(Tools|Clothing|Musical instruments|Percussion instruments|String instruments|Wind instruments|Keyboard instruments|Weapons|Firearms|Vehicles|Containers|Measuring instruments|Footwear|Headwear|Toys|Furniture|Light sources|Fasteners|Computer hardware|Kitchenware|Cookware|Cutlery|Tableware|Watercraft|Aircraft|Jewelry|Bags|Household appliances|Home appliances|Writing instruments|Stationery|Cosmetics|Puppets|Bottles|Undergarments|Coats|Garments|Trousers|Shirts|Dresses|Eyewear|Horse tack|Locks|Bedding|Kitchen utensils|Utensils|Boats|Automobiles|Bicycles|Electronic devices)$/;
 const PROFESSION_CATS = /^(Occupations|Healthcare occupations|Musicians|Scientists|Athletes)$/;
-const BODY_CATS = /^(Anatomy|Skeleton|Bones|Organs|Muscles|Teeth|Dentistry|Glands|Blood vessels|Body parts|Hair|Digestive system|Eye|Face|Hand|Foot|Head)$/;
+const BODY_CATS = /^(Anatomy|Skeleton|Bones|Organs|Muscles|Teeth|Glands|Blood vessels|Body parts|Digestive system|Eye|Face|Hand|Foot|Head)$/;
 const COLOR_CATS = /^(Colors|Reds|Greens|Blues|Yellows|Browns|Purples|Pinks|Oranges|Whites|Blacks|Grays|Greys)$/;
 const SPORT_CATS = /^(Martial arts|Ball games|Team sports|Combat sports|Water sports|Racket sports|Winter sports|Cue sports|Equestrian sports)$/;
 
@@ -50,14 +76,15 @@ async function fromWiktionary(file: string) {
       continue;
     }
     const word: string = e.word;
-    if (!word || word.length < 2 || /[0-9]/.test(word)) continue;
+    if (!word || word.length < 2 || /[0-9]/.test(word) || !isCommon(word)) continue;
     for (const sense of e.senses ?? []) {
-      if ((sense.tags ?? []).includes('form-of')) continue;
+      const tags: string[] = sense.tags ?? [];
+      if (tags.includes('form-of') || tags.some((t) => SKIP_TAGS.has(t))) continue;
       const cats: string[] = (sense.categories ?? []).map((c: any) => String(c.orig ?? c.name ?? '')).filter((c: string) => c.startsWith('pt:')).map((c: string) => c.slice(3));
       for (const [theme, re] of RULES) {
         if (!cats.some((c) => re.test(c))) continue;
-        const syn = (sense.synonyms ?? []).map((s: any) => s.word).filter((w: string) => w && w.length >= 2 && w.length <= 30);
-        buckets[theme].push({ name: word, aliases: syn });
+        const syn = (sense.synonyms ?? []).map((s: any) => s.word).filter((w: string) => w && w.length >= 2 && w.length <= 30 && isCommon(w));
+        buckets[theme].push({ name: word.charAt(0).toUpperCase() + word.slice(1), aliases: syn });
       }
     }
   }
@@ -73,8 +100,9 @@ async function fromNames(file: string): Promise<NameRecord[]> {
       header = false;
       continue;
     }
-    const first = line.split(',')[2];
-    if (first && /^[A-Z]{2,}$/.test(first)) out.push({ name: titleCase(first), aliases: [] });
+    const cols = line.split(',');
+    const first = cols[2];
+    if (first && /^[A-Z]{2,}$/.test(first) && Number(cols[5]) >= MIN_NAME_PEOPLE) out.push({ name: titleCase(first), aliases: [] });
   }
   return out;
 }
@@ -84,11 +112,12 @@ function fromMunicipios(file: string): NameRecord[] {
   return data.map((m) => ({ name: m.nome, aliases: [] }));
 }
 
-function write(theme: string, incoming: NameRecord[]) {
+function write(theme: string, incoming: NameRecord[], keepExisting = false) {
   const file = path.join(OUT, `${theme}.json`);
   const core: NameRecord[] = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', `${theme}.json`), 'utf8'));
   const coreKeys = new Set(core.map((r) => normalize(r.name)));
-  const base: NameRecord[] = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : [];
+  // Cidades: preserva o que veio do Wikidata; os demais temas são refeitos do zero.
+  const base: NameRecord[] = keepExisting && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : [];
   // Mantém o que já veio do Wikidata e não repete o que já está no banco principal.
   const { records } = mergeRecords(base, incoming.filter((r) => !coreKeys.has(normalize(r.name))));
   fs.writeFileSync(file, '[\n' + records.map((r) => '  ' + JSON.stringify(r)).join(',\n') + '\n]\n');
@@ -97,11 +126,12 @@ function write(theme: string, incoming: NameRecord[]) {
 
 const dir = process.argv[2];
 if (!dir) {
-  console.error('Uso: npm run build:extra -- <pasta com nomes.csv.gz, municipios.json e kaikki-pt.jsonl>');
+  console.error('Uso: npm run build:extra -- <pasta com nomes.csv.gz, municipios.json, kaikki-pt.jsonl e pt_br_full.txt>');
   process.exit(1);
 }
 fs.mkdirSync(OUT, { recursive: true });
 write('names', await fromNames(path.join(dir, 'nomes.csv.gz')));
-write('cities', fromMunicipios(path.join(dir, 'municipios.json')));
+write('cities', fromMunicipios(path.join(dir, 'municipios.json')), true);
+loadFreq(path.join(dir, 'pt_br_full.txt'));
 const wk = await fromWiktionary(path.join(dir, 'kaikki-pt.jsonl'));
 for (const [theme, recs] of Object.entries(wk)) write(theme, recs);
