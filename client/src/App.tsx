@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { QuizPublicRoom } from '../../shared/quiz';
 import type { StopPublicRoom } from '../../shared/stop';
 import type { GameKind, JoinResult, PublicRoom } from '../../shared/types';
 import Home from './components/Home';
@@ -6,7 +7,7 @@ import RoomView from './components/RoomView';
 import { codeFromPath, emitAck, loadProfile, loadSession, saveProfile, saveSession, socket, syncClock, useSocketEvent } from './net';
 
 export default function App() {
-  const [room, setRoom] = useState<PublicRoom | StopPublicRoom | null>(null);
+  const [room, setRoom] = useState<PublicRoom | StopPublicRoom | QuizPublicRoom | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
   const [connected, setConnected] = useState(socket.connected);
   const [error, setError] = useState('');
@@ -16,7 +17,7 @@ export default function App() {
     return !!s && s.code === codeFromPath();
   });
 
-  useSocketEvent<PublicRoom | StopPublicRoom>('room:state', (state) => {
+  useSocketEvent<PublicRoom | StopPublicRoom | QuizPublicRoom>('room:state', (state) => {
     syncClock(state.serverNow);
     setRoom(state);
   });

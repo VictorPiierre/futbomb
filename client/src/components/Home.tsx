@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import { AVATARS, type GameKind } from '../../../shared/types';
-import { BombMark, Logo, StopMark } from './Icons';
+import { BombMark, Logo, QuizMark, StopMark } from './Icons';
 
 const GAMES: { id: GameKind; name: string; text: string; players: string }[] = [
   { id: 'pavio', name: 'Pavio Curto', text: 'A bomba passa de mão em mão: diga uma palavra do tema antes que ela exploda.', players: '2 a 4 jogadores' },
   { id: 'stop', name: 'Stop', text: 'Todos preenchem as categorias com a mesma letra. Quem terminar grita STOP!', players: '2 a 10 jogadores' },
+  { id: 'quiz', name: 'Chutômetro', text: 'Quantos metros tem a Torre Eiffel? Todos chutam: quem chegar mais perto pontua.', players: '2 a 10 jogadores' },
 ];
 
 interface Props {
@@ -53,7 +54,7 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
         </div>
 
         {!invited && (
-          <div className="mb-4 grid grid-cols-2 gap-3">
+          <div className="mb-4 grid grid-cols-3 gap-2 sm:gap-3">
             {GAMES.map((g) => (
               <button
                 key={g.id}
@@ -61,12 +62,12 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
                 onClick={() => setGame(g.id)}
                 className={`flex cursor-pointer flex-col items-center gap-1.5 rounded-2xl border-2 p-3 text-center transition sm:p-4 ${
                   game === g.id
-                    ? g.id === 'stop' ? 'border-pop bg-pop/10' : 'border-fire bg-fire/10'
+                    ? g.id === 'stop' ? 'border-pop bg-pop/10' : g.id === 'quiz' ? 'border-spark bg-spark/10' : 'border-fire bg-fire/10'
                     : 'border-line bg-panel/60 hover:border-line hover:bg-panel'
                 }`}
               >
-                {g.id === 'stop' ? <StopMark className="h-12 w-12" /> : <BombMark className="h-12 w-12" />}
-                <span className={`font-display text-xl ${g.id === 'stop' ? 'text-pop' : 'text-fire'}`}>{g.name}</span>
+                {g.id === 'stop' ? <StopMark className="h-12 w-12" /> : g.id === 'quiz' ? <QuizMark className="h-12 w-12" /> : <BombMark className="h-12 w-12" />}
+                <span className={`font-display text-lg sm:text-xl ${g.id === 'stop' ? 'text-pop' : g.id === 'quiz' ? 'text-spark' : 'text-fire'}`}>{g.name}</span>
                 <span className="text-xs leading-snug text-muted">{g.text}</span>
                 <span className="text-[11px] font-semibold text-muted/80">{g.players}</span>
               </button>

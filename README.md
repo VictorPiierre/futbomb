@@ -14,6 +14,21 @@ aperta **STOP** e a rodada acaba para todos. Na correção, **quem decide são o
 StopotS): todos veem a mesma categoria por vez, toda resposta começa valendo e é anulada se a maioria
 der 👎; em branco ou com a letra errada não vale. Resposta única vale 10, repetida vale 5. Vence quem somar mais pontos nas rodadas.
 
+### 🎯 Chutômetro (2 a 10 jogadores)
+Perguntas de quantidade ("Quantos metros tem a Torre Eiffel?", "Em que ano nasceu Pelé?"):
+todos chutam um número ao mesmo tempo. O mais perto ganha 5 pontos, o segundo 3 e o terceiro 1;
+acertar na mosca dá +2. Vence quem chegar primeiro na meta (15, 25, 40 ou 60 pontos); empate no
+topo vai para pergunta de desempate. Aceita chutes como `1.500`, `1,5 mil` ou `2 milhões`.
+
+São dezenas de milhares de perguntas em 9 categorias, e uma sala nunca repete pergunta
+(nem entre partidas). Elas ficam em `data/quiz/`:
+- `curated.json` — curiosidades clássicas escritas à mão;
+- `wd-*.json` — geradas do Wikidata (população de cidades e países, áreas, altitude de montanhas,
+  rios, ilhas, altura de prédios e torres, capacidade de estádios, anos de nascimento/morte de
+  famosos, lançamento de filmes, séries e jogos, fundação de clubes, empresas e bandas…).
+
+Para regerar: `npm run fetch:quiz` (ou `npm run fetch:quiz -- <modelo>` para um só).
+
 **Temas / categorias:** 🦁 Animais · 🧸 Objetos · 🍎 Comidas e frutas · 🎨 Cores · 🌎 Países · ⭐ Famosos ·
 💼 Profissões · 🙋 Nomes · 🏙️ Cidades · 🏷️ Marcas · 🎮 Jogos e brincadeiras · 🎬 Filmes ·
 📺 Séries, novelas e desenhos · 🏅 Esportes · 🫀 Partes do corpo · ⚽ Jogadores · 🛡️ Clubes ·
@@ -63,6 +78,10 @@ E o teste do Stop:
 
 ```bash
 npm run smoke:stop
+```
+
+```bash
+npm run smoke:quiz
 ```
 
 (com o servidor rodando em outro terminal via `npm start`).

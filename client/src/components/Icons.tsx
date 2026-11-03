@@ -31,7 +31,7 @@ export const IconLink = (p: P) => (
   <svg {...base} {...p}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg>
 );
 
-export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game?: 'pavio' | 'stop' | 'hub' }) {
+export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game?: 'pavio' | 'stop' | 'quiz' | 'hub' }) {
   const big = size === 'lg';
   const mark = big ? 'h-16 w-16 sm:h-20 sm:w-20' : 'h-9 w-9';
   if (game === 'hub') {
@@ -39,6 +39,14 @@ export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game
       <span className={`font-display leading-none ${big ? 'title-stroke text-5xl sm:text-6xl' : 'text-xl'}`}>
         Joga<span className="text-fire">tina</span>
       </span>
+    );
+  }
+  if (game === 'quiz') {
+    return (
+      <div className={`flex items-center ${big ? 'gap-3' : 'gap-2'}`}>
+        <QuizMark className={mark} />
+        <span className={`font-display leading-none text-spark ${big ? 'text-5xl sm:text-7xl' : 'text-xl'}`}>Chutômetro</span>
+      </div>
     );
   }
   if (game === 'stop') {
@@ -57,6 +65,22 @@ export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game
         <span className="text-fire">Curto</span>
       </span>
     </div>
+  );
+}
+
+/** Marca do Chutômetro: medidor com ponteiro. */
+export function QuizMark({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} aria-hidden>
+      <circle cx="32" cy="36" r="26" fill="#241c33" stroke="#ffd23f" strokeWidth="3" />
+      <path d="M12 40a20 20 0 0 1 40 0" fill="none" stroke="#3a2f4a" strokeWidth="6" strokeLinecap="round" />
+      <path d="M12 40a20 20 0 0 1 14-19" fill="none" stroke="#3ddc97" strokeWidth="6" strokeLinecap="round" />
+      <path d="M26 21a20 20 0 0 1 14 0" fill="none" stroke="#ffd23f" strokeWidth="6" strokeLinecap="round" />
+      <path d="M40 21a20 20 0 0 1 12 19" fill="none" stroke="#ff4d5e" strokeWidth="6" strokeLinecap="round" />
+      <path d="M32 40 L44 24" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" />
+      <circle cx="32" cy="40" r="4.5" fill="#ffd23f" />
+      <text x="32" y="56" textAnchor="middle" fontFamily="Lilita One, sans-serif" fontSize="9" fill="#ffd23f">???</text>
+    </svg>
   );
 }
 

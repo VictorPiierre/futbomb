@@ -8,6 +8,8 @@ import { AVATARS, type JoinResult } from '../shared/types.ts';
 import { NAME_INDEXES, rejectedList } from './names.ts';
 import { Room } from './room.ts';
 import { StopRoom } from './stop-room.ts';
+import { QuizRoom } from './quiz-room.ts';
+import { QUIZ_TOTAL } from './quiz-bank.ts';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -17,13 +19,14 @@ const ROOM_TTL_MS = 30 * 60_000;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: true }, pingInterval: 10_000, pingTimeout: 8_000 });
-type AnyRoom = Room | StopRoom;
+type AnyRoom = Room | StopRoom | QuizRoom;
 const rooms = new Map<string, AnyRoom>();
 
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     rooms: rooms.size,
+    quizQuestions: QUIZ_TOTAL,
     words: Object.fromEntries(Object.entries(NAME_INDEXES).map(([t, idx]) => [t, idx.entities.length])),
   });
 });
@@ -85,7 +88,11 @@ io.on('connection', (socket) => {
   socket.on('room:create', (payload: { name?: string; avatar?: string; game?: string }, ack?: (r: JoinResult) => void) => {
     const name = cleanName(payload?.name);
     if (!name) return ack?.({ ok: false, error: 'Escolha um apelido.' });
-    const room = payload?.game === 'stop' ? new StopRoom(newCode(), io, removeRoom) : new Room(newCode(), io, removeRoom);
+    const code = newCode();
+    const room =
+      payload?.game === 'stop' ? new StopRoom(code, io, removeRoom)
+      : payload?.game === 'quiz' ? new QuizRoom(code, io, removeRoom)
+      : new Room(code, io, removeRoom);
     rooms.set(room.code, room);
     const m = room.addMember(name, cleanAvatar(payload?.avatar), socket.id);
     if (typeof m === 'string') return ack?.({ ok: false, error: m });
@@ -189,6 +196,16 @@ io.on('connection', (socket) => {
     room?.next(memberId);
   });
 
+  // ---------- Chutômetro ----------
+  socket.on('quiz:guess', (text: string, ack?: (r: unknown) => void) => {
+    const { room, memberId } = current(socket);
+    ack?.(room instanceof QuizRoom ? room.guess(memberId, text) : { ok: false, error: 'Sala não encontrada.' });
+  });
+  socket.on('quiz:next', () => {
+    const { room, memberId } = current(socket);
+    if (room instanceof QuizRoom) room.next(memberId);
+  });
+
   socket.on('disconnect', () => {
     const { room } = current(socket);
     room?.disconnect(socket.id);
@@ -207,6 +224,7 @@ setInterval(() => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`💣 Pavio Curto rodando em http://localhost:${PORT}`);
+  console.log(`   Chutômetro: ${QUIZ_TOTAL} perguntas`);
   console.log(`   Banco: ${Object.entries(NAME_INDEXES).map(([t, idx]) => `${t} ${idx.entities.length}`).join(', ')}`);
   if (!fs.existsSync(CLIENT_DIST)) console.log('   (modo dev: abra o front-end em http://localhost:5173)');
 });
