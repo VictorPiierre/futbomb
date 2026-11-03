@@ -1,17 +1,21 @@
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import type { Server } from 'socket.io';
 import {
-  QUIZ_CATEGORIES, QUIZ_EXACT_BONUS, QUIZ_MAX_PLAYERS, QUIZ_POINTS, QUIZ_REVEAL_MS, QUIZ_TARGETS, QUIZ_TIMES,
-  parseGuess,
+  QUIZ_BETS, QUIZ_BET_PENALTY, QUIZ_CATEGORIES, QUIZ_CLOSE_BONUS, QUIZ_DIFFICULTIES, QUIZ_EXACT_BONUS, QUIZ_HIGHLOW_POINTS,
+  QUIZ_LIGHTNING_S, QUIZ_MAX_PLAYERS, QUIZ_UNDERDOG_BONUS, QUIZ_UNDERDOG_PENALTY, QUIZ_POINTS, QUIZ_REVEAL_MS, QUIZ_TARGETS, QUIZ_TIMES,
+  closeness, parseGuess,
   type QuizCategory, type QuizPhase, type QuizPublicRoom, type QuizQuestion, type QuizResult, type QuizSettings,
+  type QuizSpecial,
 } from '../shared/quiz.ts';
-import { QUIZ_BANK } from './quiz-bank.ts';
+import { difficultyPool } from './quiz-bank.ts';
 
 const MAX_MEMBERS = 16;
 const GRACE_LOBBY_MS = 20_000;
 const GRACE_GAME_MS = 60_000;
 /** Quando todos já chutaram, espera um instante antes de revelar. */
 const ALL_IN_DELAY_MS = 700;
+/** Chance de uma pergunta (a partir da 3ª) ser especial. */
+const SPECIAL_CHANCE = Number(process.env.QUIZ_SPECIAL_CHANCE ?? 0.3);
 
 interface Member {
   id: string;
@@ -24,6 +28,10 @@ interface Member {
   left: boolean;
   score: number;
   guess: number | null;
+  bets: number;
+  betting: boolean;
+  /** Azarão escolhido nesta pergunta. */
+  pick: string | null;
   graceTimer?: NodeJS.Timeout;
 }
 
@@ -32,7 +40,8 @@ export class QuizRoom {
   readonly code: string;
   hostId = '';
   settings: QuizSettings = {
-    categories: Object.keys(QUIZ_CATEGORIES) as QuizCategory[],
+    categories: (Object.keys(QUIZ_CATEGORIES) as QuizCategory[]).filter((c) => c !== 'brazil'),
+    difficulty: 'normal',
     target: 25,
     questionTime: 20,
     maxPlayers: 10,
@@ -43,8 +52,13 @@ export class QuizRoom {
 
   private number = 0;
   private current: QuizQuestion | null = null;
+  private special: QuizSpecial | null = null;
+  private reference: number | null = null;
+  private lastSpecial = 0;
   private endsAt: number | null = null;
   private results: QuizResult[] | null = null;
+  private roundWorst: string[] | null = null;
+  private roundBest: string[] | null = null;
   private ranking: QuizPublicRoom['ranking'] = null;
   private winnerId: string | null = null;
   private timer?: NodeJS.Timeout;
@@ -82,7 +96,7 @@ export class QuizRoom {
     for (let i = 2; taken.has(unique.toLowerCase()); i++) unique = `${name} ${i}`;
     const m: Member = {
       id: randomUUID().slice(0, 8), token: randomBytes(16).toString('hex'), name: unique, avatar, socketId,
-      connected: true, role: canPlay ? 'player' : 'spectator', left: false, score: 0, guess: null,
+      connected: true, role: canPlay ? 'player' : 'spectator', left: false, score: 0, guess: null, bets: QUIZ_BETS, betting: false, pick: null,
     };
     this.members.push(m);
     if (!this.hostId) this.hostId = m.id;
@@ -95,7 +109,7 @@ export class QuizRoom {
     m.socketId = socketId;
     m.connected = true;
     this.touch();
-    this.io.to(socketId).emit('quiz:mine', { number: this.number, guess: m.guess });
+    this.io.to(socketId).emit('quiz:mine', { number: this.number, guess: m.guess, betting: m.betting });
   }
 
   disconnect(socketId: string) {
@@ -155,6 +169,7 @@ export class QuizRoom {
       const cats = [...new Set(patch.categories.filter((c): c is QuizCategory => typeof c === 'string' && c in QUIZ_CATEGORIES))];
       if (cats.length >= 1) s.categories = cats;
     }
+    if (patch.difficulty && patch.difficulty in QUIZ_DIFFICULTIES) s.difficulty = patch.difficulty;
     if (QUIZ_TARGETS.includes(patch.target as never)) s.target = patch.target!;
     if (QUIZ_TIMES.includes(patch.questionTime as never)) s.questionTime = patch.questionTime!;
     if (QUIZ_MAX_PLAYERS.includes(patch.maxPlayers as never) && patch.maxPlayers! >= this.players.length) s.maxPlayers = patch.maxPlayers!;
@@ -173,8 +188,10 @@ export class QuizRoom {
     for (const p of this.players) {
       p.score = 0;
       p.left = false;
+      p.bets = QUIZ_BETS;
     }
     this.number = 0;
+    this.lastSpecial = 0;
     this.ranking = null;
     this.winnerId = null;
     this.nextQuestion();
@@ -199,6 +216,8 @@ export class QuizRoom {
     for (const m of this.members) {
       m.score = 0;
       m.guess = null;
+      m.bets = QUIZ_BETS;
+      m.betting = false;
     }
     this.phase = 'lobby';
     this.current = null;
@@ -209,7 +228,8 @@ export class QuizRoom {
 
   /** Sorteia a categoria (evitando repetir a anterior) e uma pergunta ainda não feita nesta sala. */
   private pickQuestion(): QuizQuestion | null {
-    const cats = this.settings.categories.filter((c) => QUIZ_BANK[c].some((q) => !this.used.has(q.id)));
+    const pools = new Map(this.settings.categories.map((c) => [c, difficultyPool(c, this.settings.difficulty)]));
+    const cats = this.settings.categories.filter((c) => pools.get(c)!.some((q) => !this.used.has(q.id)));
     if (!cats.length) {
       // Esgotou tudo (improvável): libera as perguntas de novo.
       this.used.clear();
@@ -217,12 +237,36 @@ export class QuizRoom {
     }
     const pool = cats.length > 1 ? cats.filter((c) => c !== this.lastCat) : cats;
     const cat = pool[randomInt(pool.length)];
-    const list = QUIZ_BANK[cat];
+    const list = pools.get(cat)!;
     for (let tries = 0; tries < 50; tries++) {
       const q = list[randomInt(list.length)];
       if (!this.used.has(q.id)) return q;
     }
     return list.find((q) => !this.used.has(q.id)) ?? null;
+  }
+
+  /** Rodadas especiais: nunca nas duas primeiras perguntas nem duas seguidas. */
+  private drawSpecial(q: QuizQuestion): QuizSpecial | null {
+    if (this.number < 3 || this.number - this.lastSpecial < 2 || Math.random() > SPECIAL_CHANCE) return null;
+    const options: QuizSpecial[] = ['lightning', 'double', 'highlow'];
+    const sp = options[randomInt(options.length)];
+    return sp === 'highlow' && q.a < 3 ? 'double' : sp;
+  }
+
+  /** Número de referência do "mais ou menos": um pouco acima ou abaixo da resposta. */
+  private makeReference(a: number, unit: string): number {
+    const up = Math.random() < 0.5;
+    if (unit === 'ano') {
+      const delta = 3 + randomInt(28);
+      return up && a + delta <= new Date().getFullYear() ? a + delta : a - delta;
+    }
+    const factor = 0.25 + Math.random() * 0.35;
+    let ref = up ? a * (1 + factor) : a * (1 - factor);
+    // Arredonda para um número "bonito" e garante que não coincide com a resposta.
+    const mag = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.abs(ref))) - 1));
+    ref = Math.round(ref / mag) * mag;
+    if (ref === a) ref = up ? a + mag : a - mag;
+    return ref;
   }
 
   private nextQuestion() {
@@ -234,9 +278,18 @@ export class QuizRoom {
     this.current = q;
     this.number++;
     this.results = null;
-    for (const m of this.members) m.guess = null;
+    this.special = this.drawSpecial(q);
+    if (this.special) this.lastSpecial = this.number;
+    this.reference = this.special === 'highlow' ? this.makeReference(q.a, q.unit) : null;
+    this.roundWorst = null;
+    this.roundBest = null;
+    for (const m of this.members) {
+      m.guess = null;
+      m.betting = false;
+      m.pick = null;
+    }
     this.phase = 'question';
-    const ms = this.settings.questionTime * 1000;
+    const ms = (this.special === 'lightning' ? QUIZ_LIGHTNING_S : this.settings.questionTime) * 1000;
     this.endsAt = Date.now() + ms;
     this.timer = setTimeout(() => this.reveal(), ms);
     this.broadcast();
@@ -246,13 +299,41 @@ export class QuizRoom {
     const m = this.find(by);
     if (!m || m.role !== 'player' || m.left) return { ok: false, error: 'Você está assistindo.' };
     if (this.phase !== 'question') return { ok: false, error: 'Agora não dá para chutar.' };
-    const value = parseGuess(String(raw ?? '').slice(0, 40));
-    if (value === null || value < 0) return { ok: false, error: 'Digite um número (ex.: 330, 1.500 ou 2 milhões).' };
+    const highlow = this.special === 'highlow';
+    const value = highlow ? (raw === 'up' ? 1 : raw === 'down' ? -1 : null) : parseGuess(String(raw ?? '').slice(0, 40));
+    if (value === null || (!highlow && value < 0)) {
+      return { ok: false, error: highlow ? 'Escolha maior ou menor.' : 'Digite um número (ex.: 330, 1.500 ou 2 milhões).' };
+    }
     const first = m.guess === null;
     m.guess = value;
     if (first) this.broadcast();
     this.checkAllIn();
     return { ok: true, value };
+  }
+
+  /** Liga/desliga a ficha "🔥 Tô certo!" nesta pergunta. */
+  bet(by: string): { ok: boolean; error?: string } {
+    const m = this.find(by);
+    if (!m || m.role !== 'player' || m.left || this.phase !== 'question') return { ok: false, error: 'Agora não dá.' };
+    if (!m.betting && m.bets <= 0) return { ok: false, error: 'Você já usou suas fichas.' };
+    m.betting = !m.betting;
+    this.broadcast();
+    return { ok: true };
+  }
+
+  /** Escolhe (ou tira) quem vai ser o azarão — o pior da rodada. */
+  pickUnderdog(by: string, target: unknown): { ok: boolean; error?: string } {
+    const m = this.find(by);
+    if (!m || m.role !== 'player' || m.left || this.phase !== 'question') return { ok: false, error: 'Agora não dá.' };
+    if (target === null || target === m.pick) {
+      m.pick = null;
+    } else {
+      const t = this.activePlayers().find((p) => p.id === target);
+      if (!t || t.id === m.id) return { ok: false, error: 'Escolha outro jogador.' };
+      m.pick = t.id;
+    }
+    this.broadcast();
+    return { ok: true };
   }
 
   private checkAllIn() {
@@ -267,26 +348,62 @@ export class QuizRoom {
   private reveal() {
     if (this.phase !== 'question' || !this.current) return;
     clearTimeout(this.timer);
-    const answer = this.current.a;
+    const { a: answer, unit } = this.current;
     const players = this.activePlayers();
-    const guessed = players
-      .filter((p) => p.guess !== null)
-      .map((p) => ({ p, diff: Math.abs(p.guess! - answer) }))
-      .sort((a, b) => a.diff - b.diff);
-    // Empates na mesma distância dividem a mesma colocação.
+    const mult = this.special === 'double' ? 2 : 1;
     const results: QuizResult[] = [];
-    let place = 0;
-    let lastDiff = -1;
-    guessed.forEach(({ p, diff }, i) => {
-      if (diff !== lastDiff) place = i + 1;
-      lastDiff = diff;
-      const exact = diff === 0;
-      const points = (QUIZ_POINTS[place - 1] ?? 0) + (exact ? QUIZ_EXACT_BONUS : 0);
-      p.score += points;
-      results.push({ playerId: p.id, guess: p.guess, diff, place, points, exact });
-    });
-    for (const p of players.filter((x) => x.guess === null)) {
-      results.push({ playerId: p.id, guess: null, diff: null, place: null, points: 0, exact: false });
+
+    if (this.special === 'highlow') {
+      const right = answer > this.reference! ? 1 : -1;
+      for (const p of players) {
+        const hit = p.guess === right;
+        const points = p.guess === null ? 0 : hit ? QUIZ_HIGHLOW_POINTS * (p.betting ? 2 : 1) : p.betting ? -QUIZ_BET_PENALTY : 0;
+        results.push({ playerId: p.id, guess: p.guess, diff: null, place: null, closeness: p.guess === null ? null : hit ? 'exact' : 'far', bet: p.betting, points, pick: null, pickPoints: 0 });
+      }
+    } else {
+      const guessed = players
+        .filter((p) => p.guess !== null)
+        .map((p) => ({ p, diff: Math.abs(p.guess! - answer), c: closeness(answer, p.guess!, unit) }))
+        .sort((x, y) => x.diff - y.diff);
+      // Empates na mesma distância dividem a colocação; quem errou feio não pontua.
+      let place = 0;
+      let lastDiff = -1;
+      guessed.forEach(({ p, diff, c }, i) => {
+        if (diff !== lastDiff) place = i + 1;
+        lastDiff = diff;
+        let base = c === 'far' ? 0 : (QUIZ_POINTS[place - 1] ?? 0);
+        if (c === 'exact') base += QUIZ_EXACT_BONUS;
+        if (c === 'close') base += QUIZ_CLOSE_BONUS;
+        let points = base * mult;
+        if (p.betting) points = base > 0 ? points * 2 : -QUIZ_BET_PENALTY;
+        results.push({ playerId: p.id, guess: p.guess, diff, place, closeness: c, bet: p.betting, points, pick: null, pickPoints: 0 });
+      });
+      for (const p of players.filter((x) => x.guess === null)) {
+        results.push({ playerId: p.id, guess: null, diff: null, place: null, closeness: null, bet: false, points: 0, pick: null, pickPoints: 0 });
+      }
+    }
+
+    // Azarão: pior = mais longe (ou não respondeu / errou o lado); melhor = 1º lugar (ou acertou o lado).
+    const badness = (r: QuizResult) =>
+      r.guess === null ? Infinity : this.special === 'highlow' ? (r.closeness === 'exact' ? 0 : 1) : (r.diff ?? Infinity);
+    const scores = results.map((r) => ({ id: r.playerId, v: badness(r) }));
+    const maxV = Math.max(...scores.map((x) => x.v));
+    const minV = Math.min(...scores.map((x) => x.v));
+    // Se todos empataram, não há azarão nem destaque.
+    const worst = maxV === minV ? [] : scores.filter((x) => x.v === maxV).map((x) => x.id);
+    const best = maxV === minV ? [] : scores.filter((x) => x.v === minV).map((x) => x.id);
+    for (const r of results) {
+      const p = this.find(r.playerId)!;
+      r.pick = p.pick;
+      r.pickPoints = !p.pick ? 0 : worst.includes(p.pick) ? QUIZ_UNDERDOG_BONUS : best.includes(p.pick) ? -QUIZ_UNDERDOG_PENALTY : 0;
+    }
+    this.roundWorst = worst;
+    this.roundBest = best;
+
+    for (const r of results) {
+      const p = this.find(r.playerId)!;
+      p.score = Math.max(0, p.score + r.points + r.pickPoints);
+      if (r.bet) p.bets = Math.max(0, p.bets - 1);
     }
     this.results = results;
     this.phase = 'reveal';
@@ -350,15 +467,18 @@ export class QuizRoom {
       phase: this.phase,
       players: this.players.map((m) => ({
         id: m.id, name: m.name, avatar: m.avatar, connected: m.connected, left: m.left, score: m.score, answered: m.guess !== null,
+        bets: m.bets, betting: m.betting, picked: m.pick !== null,
       })),
       spectators: this.members
         .filter((m) => m.role === 'spectator')
         .map((m) => ({ id: m.id, name: m.name, avatar: m.avatar, connected: m.connected })),
       number: this.number,
-      question: q && this.phase !== 'lobby' ? { cat: q.cat, q: q.q, unit: q.unit } : null,
+      question: q && this.phase !== 'lobby' ? { cat: q.cat, q: q.q, unit: q.unit, special: this.special, reference: this.reference } : null,
       answer: this.phase === 'reveal' || this.phase === 'ended' ? (q?.a ?? null) : null,
       endsAt: this.endsAt,
       results: this.phase === 'reveal' || this.phase === 'ended' ? this.results : null,
+      roundWorst: this.phase === 'reveal' || this.phase === 'ended' ? this.roundWorst : null,
+      roundBest: this.phase === 'reveal' || this.phase === 'ended' ? this.roundBest : null,
       ranking: this.ranking,
       winnerId: this.winnerId,
       serverNow: Date.now(),

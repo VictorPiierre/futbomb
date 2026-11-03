@@ -201,6 +201,14 @@ io.on('connection', (socket) => {
     const { room, memberId } = current(socket);
     ack?.(room instanceof QuizRoom ? room.guess(memberId, text) : { ok: false, error: 'Sala não encontrada.' });
   });
+  socket.on('quiz:bet', (ack?: (r: unknown) => void) => {
+    const { room, memberId } = current(socket);
+    ack?.(room instanceof QuizRoom ? room.bet(memberId) : { ok: false });
+  });
+  socket.on('quiz:pick', (target: string | null, ack?: (r: unknown) => void) => {
+    const { room, memberId } = current(socket);
+    ack?.(room instanceof QuizRoom ? room.pickUnderdog(memberId, target) : { ok: false });
+  });
   socket.on('quiz:next', () => {
     const { room, memberId } = current(socket);
     if (room instanceof QuizRoom) room.next(memberId);

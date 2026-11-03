@@ -16,9 +16,17 @@ der 👎; em branco ou com a letra errada não vale. Resposta única vale 10, re
 
 ### 🎯 Chutômetro (2 a 10 jogadores)
 Perguntas de quantidade ("Quantos metros tem a Torre Eiffel?", "Em que ano nasceu Pelé?"):
-todos chutam um número ao mesmo tempo. O mais perto ganha 5 pontos, o segundo 3 e o terceiro 1;
-acertar na mosca dá +2. Vence quem chegar primeiro na meta (15, 25, 40 ou 60 pontos); empate no
-topo vai para pergunta de desempate. Aceita chutes como `1.500`, `1,5 mil` ou `2 milhões`.
+todos chutam um número ao mesmo tempo (aceita `1.500`, `1,5 mil`, `2 milhões`).
+
+- **Pontos:** 1º mais perto 5, 2º 3, 3º 1 — mas quem errar feio (mais de 50%, ou mais de 30 anos)
+  não pontua. Muito perto (até 5% / 2 anos) +1; na mosca +2.
+- **🔥 Tô certo!:** 2 fichas por partida que dobram os pontos da rodada — errou, perde 3.
+- **🫏 Azarão:** aponte quem vai ser o pior da rodada. Acertou, +1; se ele for o melhor, -1.
+- **Rodadas especiais** (a partir da 3ª pergunta): ⚡ relâmpago (7 s), ✖️2 dobrada e
+  ⬆️⬇️ mais ou menos (a resposta é maior ou menor que um número?).
+- **Revelação com suspense:** tambor, número subindo e uma régua com o chute de cada um.
+- **Dificuldade:** Fácil (só coisas bem conhecidas), Normal ou Difícil; categoria 🇧🇷 Só Brasil.
+- Vence quem chegar primeiro na meta; empate no topo vai para desempate.
 
 São dezenas de milhares de perguntas em 9 categorias, e uma sala nunca repete pergunta
 (nem entre partidas). Elas ficam em `data/quiz/`:
@@ -27,7 +35,8 @@ São dezenas de milhares de perguntas em 9 categorias, e uma sala nunca repete p
   rios, ilhas, altura de prédios e torres, capacidade de estádios, anos de nascimento/morte de
   famosos, lançamento de filmes, séries e jogos, fundação de clubes, empresas e bandas…).
 
-Para regerar: `npm run fetch:quiz` (ou `npm run fetch:quiz -- <modelo>` para um só).
+Para regerar: `npm run fetch:quiz` (ou `npm run fetch:quiz -- <modelo>` para um só) e depois
+`npm run quiz:fame`, que marca a fama de cada assunto (usada na dificuldade) e o que é do Brasil.
 
 **Temas / categorias:** 🦁 Animais · 🧸 Objetos · 🍎 Comidas e frutas · 🎨 Cores · 🌎 Países · ⭐ Famosos ·
 💼 Profissões · 🙋 Nomes · 🏙️ Cidades · 🏷️ Marcas · 🎮 Jogos e brincadeiras · 🎬 Filmes ·
