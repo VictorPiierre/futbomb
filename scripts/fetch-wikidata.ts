@@ -13,7 +13,7 @@ import { normalize } from '../shared/normalize.ts';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'data', 'extra');
 const ENDPOINT = 'https://query.wikidata.org/sparql';
-const UA = 'PavioCurtoWordlist/1.0 (jogo de palavras; contato digiartsgrafica@gmail.com)';
+const UA = 'PavioCurtoWordlist/1.0 (jogo de palavras)';
 
 // Cada consulta devolve ?item e ?sl (sitelinks); os rótulos são buscados depois.
 const pt = (where: string) => `SELECT DISTINCT ?item WHERE { ${where} }`;

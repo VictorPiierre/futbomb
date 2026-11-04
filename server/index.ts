@@ -9,7 +9,7 @@ import { NAME_INDEXES, rejectedList } from './names.ts';
 import { Room } from './room.ts';
 import { StopRoom } from './stop-room.ts';
 import { QuizRoom } from './quiz-room.ts';
-import { QUIZ_TOTAL } from './quiz-bank.ts';
+import { difficultyCounts, QUIZ_TOTAL } from './quiz-bank.ts';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,6 +27,7 @@ app.get('/api/health', (_req, res) => {
     ok: true,
     rooms: rooms.size,
     quizQuestions: QUIZ_TOTAL,
+    quizByDifficulty: difficultyCounts(),
     words: Object.fromEntries(Object.entries(NAME_INDEXES).map(([t, idx]) => [t, idx.entities.length])),
   });
 });

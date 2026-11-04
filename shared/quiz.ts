@@ -25,13 +25,15 @@ export interface QuizQuestion {
   unit: string;
   /** Fama do assunto (nº de Wikipédias com artigo); maior = mais conhecido. */
   f?: number;
+  /** Visitas por mês ao artigo na Wikipédia em português (quanto o Brasil conhece). */
+  pv?: number;
   /** Pergunta sobre algo do Brasil (categoria "Só Brasil"). */
   br?: boolean;
 }
 
 export const QUIZ_DIFFICULTIES = {
-  easy: { label: 'Fácil', hint: 'só coisas bem conhecidas' },
-  normal: { label: 'Normal', hint: 'mistura equilibrada' },
+  easy: { label: 'Fácil', hint: 'só coisas que todo mundo conhece' },
+  normal: { label: 'Normal', hint: 'inclui coisas menos conhecidas' },
   hard: { label: 'Difícil', hint: 'vale tudo, até o obscuro' },
 } as const;
 export type QuizDifficulty = keyof typeof QUIZ_DIFFICULTIES;

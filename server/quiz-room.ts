@@ -5,7 +5,7 @@ import {
   QUIZ_LIGHTNING_S, QUIZ_MAX_PLAYERS, QUIZ_UNDERDOG_BONUS, QUIZ_UNDERDOG_PENALTY, QUIZ_POINTS, QUIZ_REVEAL_MS, QUIZ_TARGETS, QUIZ_TIMES,
   closeness, parseGuess,
   type QuizCategory, type QuizPhase, type QuizPublicRoom, type QuizQuestion, type QuizResult, type QuizSettings,
-  type QuizSpecial,
+  type QuizDifficulty, type QuizSpecial,
 } from '../shared/quiz.ts';
 import { difficultyPool } from './quiz-bank.ts';
 
@@ -41,7 +41,7 @@ export class QuizRoom {
   hostId = '';
   settings: QuizSettings = {
     categories: (Object.keys(QUIZ_CATEGORIES) as QuizCategory[]).filter((c) => c !== 'brazil'),
-    difficulty: 'normal',
+    difficulty: 'easy',
     target: 25,
     questionTime: 20,
     maxPlayers: 10,
@@ -228,8 +228,15 @@ export class QuizRoom {
 
   /** Sorteia a categoria (evitando repetir a anterior) e uma pergunta ainda não feita nesta sala. */
   private pickQuestion(): QuizQuestion | null {
-    const pools = new Map(this.settings.categories.map((c) => [c, difficultyPool(c, this.settings.difficulty)]));
-    const cats = this.settings.categories.filter((c) => pools.get(c)!.some((q) => !this.used.has(q.id)));
+    const order: QuizDifficulty[] = ['easy', 'normal', 'hard'];
+    let pools = new Map<QuizCategory, QuizQuestion[]>();
+    let cats: QuizCategory[] = [];
+    // Se a dificuldade escolhida acabar nas categorias da sala, passa para a seguinte.
+    for (const d of order.slice(order.indexOf(this.settings.difficulty))) {
+      pools = new Map(this.settings.categories.map((c) => [c, difficultyPool(c, d)]));
+      cats = this.settings.categories.filter((c) => pools.get(c)!.some((q) => !this.used.has(q.id)));
+      if (cats.length) break;
+    }
     if (!cats.length) {
       // Esgotou tudo (improvável): libera as perguntas de novo.
       this.used.clear();

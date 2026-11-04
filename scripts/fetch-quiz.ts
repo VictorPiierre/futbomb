@@ -14,7 +14,7 @@ import type { QuizCategory, QuizQuestion } from '../shared/quiz.ts';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'data', 'quiz');
 const ENDPOINT = 'https://query.wikidata.org/sparql';
-const UA = 'JogatinaQuiz/1.0 (jogo de perguntas; contato digiartsgrafica@gmail.com)';
+const UA = 'JogatinaQuiz/1.0 (jogo de perguntas)';
 const YEAR_NOW = new Date().getFullYear();
 
 type Row = Record<string, string>;

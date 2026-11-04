@@ -11,7 +11,7 @@ import type { QuizQuestion } from '../shared/quiz.ts';
 
 const DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data', 'quiz');
 const ENDPOINT = 'https://query.wikidata.org/sparql';
-const UA = 'JogatinaQuiz/1.0 (jogo de perguntas; contato digiartsgrafica@gmail.com)';
+const UA = 'JogatinaQuiz/1.0 (jogo de perguntas)';
 // Modelos que já são só de coisas brasileiras.
 const BR_TEMPLATES = new Set(['brCityPop', 'brStateArea', 'brFamousBirth', 'brCompanies']);
 

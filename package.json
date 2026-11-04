@@ -18,7 +18,8 @@
     "smoke:stop": "tsx scripts/smoke-stop.ts",
     "fetch:quiz": "tsx scripts/fetch-quiz.ts",
     "smoke:quiz": "tsx scripts/smoke-quiz.ts",
-    "quiz:fame": "tsx scripts/quiz-fame.ts"
+    "quiz:fame": "tsx scripts/quiz-fame.ts",
+    "quiz:popularity": "tsx scripts/quiz-popularity.ts"
   },
   "dependencies": {
     "express": "^5.3.0",
