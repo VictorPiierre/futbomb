@@ -9,6 +9,8 @@ import { NAME_INDEXES, rejectedList } from './names.ts';
 import { Room } from './room.ts';
 import { StopRoom } from './stop-room.ts';
 import { QuizRoom } from './quiz-room.ts';
+import { DubRoom } from './dub-room.ts';
+import { DUB_MAX_AUDIO_BYTES } from '../shared/dub.ts';
 import { difficultyCounts, QUIZ_TOTAL } from './quiz-bank.ts';
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -18,8 +20,9 @@ const ROOM_TTL_MS = 30 * 60_000;
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: true }, pingInterval: 10_000, pingTimeout: 8_000 });
-type AnyRoom = Room | StopRoom | QuizRoom;
+// Buffer maior para as gravações do Dublagem.
+const io = new Server(server, { cors: { origin: true }, pingInterval: 10_000, pingTimeout: 20_000, maxHttpBufferSize: DUB_MAX_AUDIO_BYTES + 200_000 });
+type AnyRoom = Room | StopRoom | QuizRoom | DubRoom;
 const rooms = new Map<string, AnyRoom>();
 
 app.get('/api/health', (_req, res) => {
@@ -93,6 +96,7 @@ io.on('connection', (socket) => {
     const room =
       payload?.game === 'stop' ? new StopRoom(code, io, removeRoom)
       : payload?.game === 'quiz' ? new QuizRoom(code, io, removeRoom)
+      : payload?.game === 'dub' ? new DubRoom(code, io, removeRoom)
       : new Room(code, io, removeRoom);
     rooms.set(room.code, room);
     const m = room.addMember(name, cleanAvatar(payload?.avatar), socket.id);
@@ -213,6 +217,36 @@ io.on('connection', (socket) => {
   socket.on('quiz:next', () => {
     const { room, memberId } = current(socket);
     if (room instanceof QuizRoom) room.next(memberId);
+  });
+
+  // ---------- Dublagem ----------
+  const dubRoom = () => {
+    const { room, memberId } = current(socket);
+    return { room: room instanceof DubRoom ? room : undefined, memberId };
+  };
+  socket.on('dub:audio', (payload: { round?: number; mime?: string; data?: Buffer }, ack?: (r: unknown) => void) => {
+    const { room, memberId } = dubRoom();
+    ack?.(room ? room.audio(memberId, payload) : { ok: false, error: 'Sala não encontrada.' });
+  });
+  socket.on('dub:scene', (payload: { link?: string; start?: string; end?: string }, ack?: (r: unknown) => void) => {
+    const { room, memberId } = dubRoom();
+    ack?.(room ? room.addScene(memberId, payload) : { ok: false, error: 'Sala não encontrada.' });
+  });
+  socket.on('dub:scene-remove', (index: number) => {
+    const { room, memberId } = dubRoom();
+    room?.removeScene(memberId, index);
+  });
+  socket.on('dub:vote', (target: string) => {
+    const { room, memberId } = dubRoom();
+    room?.vote(memberId, target);
+  });
+  socket.on('dub:skip', () => {
+    const { room, memberId } = dubRoom();
+    room?.skip(memberId);
+  });
+  socket.on('dub:rewatch', () => {
+    const { room, memberId } = dubRoom();
+    room?.rewatch(memberId);
   });
 
   socket.on('disconnect', () => {

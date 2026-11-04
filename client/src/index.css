@@ -17,6 +17,7 @@
   --color-pop-soft: #ff8fb3;
   --color-ok: #3ddc97;
   --color-danger: #ff4d5e;
+  --color-sky: #38bdf8;
 }
 
 html,
@@ -190,6 +191,9 @@ body {
   }
   .chip {
     @apply cursor-pointer rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed;
+  }
+  .input {
+    @apply rounded-xl border border-line bg-ink/60 px-3 py-2.5 text-sm outline-none transition placeholder:text-muted/60 focus:border-sky/60;
   }
   .chip-on {
     @apply border-fire/70 bg-fire/15 text-fire;

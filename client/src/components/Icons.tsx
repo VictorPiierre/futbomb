@@ -31,7 +31,7 @@ export const IconLink = (p: P) => (
   <svg {...base} {...p}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg>
 );
 
-export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game?: 'pavio' | 'stop' | 'quiz' | 'hub' }) {
+export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game?: 'pavio' | 'stop' | 'quiz' | 'dub' | 'hub' }) {
   const big = size === 'lg';
   const mark = big ? 'h-16 w-16 sm:h-20 sm:w-20' : 'h-9 w-9';
   if (game === 'hub') {
@@ -39,6 +39,14 @@ export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game
       <span className={`font-display leading-none ${big ? 'title-stroke text-5xl sm:text-6xl' : 'text-xl'}`}>
         Joga<span className="text-fire">tina</span>
       </span>
+    );
+  }
+  if (game === 'dub') {
+    return (
+      <div className={`flex items-center ${big ? 'gap-3' : 'gap-2'}`}>
+        <DubMark className={mark} />
+        <span className={`font-display leading-none text-sky ${big ? 'text-5xl sm:text-7xl' : 'text-xl'}`}>Dublagem</span>
+      </div>
     );
   }
   if (game === 'quiz') {
@@ -65,6 +73,21 @@ export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game
         <span className="text-fire">Curto</span>
       </span>
     </div>
+  );
+}
+
+/** Marca do Dublagem: microfone com claquete. */
+export function DubMark({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} aria-hidden>
+      <rect x="6" y="40" width="52" height="18" rx="3" fill="#241c33" stroke="#38bdf8" strokeWidth="2.5" />
+      <path d="M6 40 L12 32 H58 L52 40 Z" fill="#38bdf8" />
+      <path d="M18 32 L13 40 M30 32 L25 40 M42 32 L37 40 M54 32 L49 40" stroke="#120d1b" strokeWidth="3" />
+      <rect x="23" y="4" width="18" height="28" rx="9" fill="#38bdf8" stroke="#bae6fd" strokeWidth="2" />
+      <path d="M27 12h10M27 17h10M27 22h10" stroke="#120d1b" strokeWidth="1.8" strokeLinecap="round" opacity=".55" />
+      <text x="32" y="54" textAnchor="middle" fontFamily="Lilita One, sans-serif" fontSize="10" fill="#38bdf8">REC</text>
+      <circle cx="14" cy="49" r="3" fill="#ff4d5e" />
+    </svg>
   );
 }
 

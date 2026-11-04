@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { DubPublicRoom } from '../../../shared/dub';
 import type { QuizPublicRoom } from '../../../shared/quiz';
 import type { StopPublicRoom } from '../../../shared/stop';
 import type { PublicRoom } from '../../../shared/types';
@@ -7,7 +8,7 @@ import Avatar from './Avatar';
 
 const MEDALS = ['🥇', '🥈', '🥉', '4º'];
 
-export default function Victory({ room, meId, isHost }: { room: PublicRoom | StopPublicRoom | QuizPublicRoom; meId: string; isHost: boolean }) {
+export default function Victory({ room, meId, isHost }: { room: PublicRoom | StopPublicRoom | QuizPublicRoom | DubPublicRoom; meId: string; isHost: boolean }) {
   const ranking = (room.ranking ?? []).map((r) => ({
     ...r,
     stat: 'score' in r ? `${r.score} pts` : `${r.correct} ✓`,
@@ -30,7 +31,7 @@ export default function Victory({ room, meId, isHost }: { room: PublicRoom | Sto
       <Confetti />
       <div className="pop-in relative w-full max-w-md rounded-3xl border border-fire/30 bg-panel p-6 text-center shadow-[0_0_80px_-20px_rgb(255_122_26/0.45)]">
         <div className="text-5xl">🏆</div>
-        <p className="mt-2 font-display text-2xl text-fire sm:text-3xl">{room.kind === 'stop' ? 'CAMPEÃO DO STOP!' : room.kind === 'quiz' ? 'CAMPEÃO DO CHUTÔMETRO!' : 'CAMPEÃO DO PAVIO CURTO!'}</p>
+        <p className="mt-2 font-display text-2xl text-fire sm:text-3xl">{room.kind === 'stop' ? 'CAMPEÃO DO STOP!' : room.kind === 'quiz' ? 'CAMPEÃO DO CHUTÔMETRO!' : room.kind === 'dub' ? 'CAMPEÃO DA DUBLAGEM!' : 'CAMPEÃO DO PAVIO CURTO!'}</p>
         {winner ? (
           <div className="mt-5 flex flex-col items-center">
             <div className="turn-glow rounded-full">
