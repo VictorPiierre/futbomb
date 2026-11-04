@@ -8,12 +8,14 @@ export interface DubScene {
   start: number;
   end: number;
   title: string;
+  /** Falas com tempo (segundos do vídeo) para a legenda de karaokê. */
+  lines?: [number, number, string][];
 }
 
 export const DUB_ROUNDS = [3, 5, 8] as const;
 export const DUB_MAX_PLAYERS = [4, 6, 8] as const;
 /** Trecho máximo de uma cena (cenas maiores são cortadas). */
-export const DUB_MAX_CLIP_S = 60;
+export const DUB_MAX_CLIP_S = 30;
 /** Tamanho máximo da gravação enviada. */
 export const DUB_MAX_AUDIO_BYTES = 3_000_000;
 /** Pausa entre uma dublagem e outra na exibição. */

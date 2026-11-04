@@ -78,17 +78,19 @@ function loadYouTube(): Promise<any> {
  * Toca o trecho da cena. playAt = horário (relógio do servidor) em que começa;
  * quem chegar atrasado entra no ponto certo. Legendas em português ligadas.
  */
-function SceneClip({ scene, playAt, muted, onPlay, onEnd }: {
+function VideoClip({ scene, playAt, muted, onPlay, onEnd, onTime }: {
   scene: DubScene;
   playAt: number | null;
   muted: boolean;
   onPlay?: (offsetS: number) => void;
   onEnd?: () => void;
+  onTime?: (t: number) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
-  const cb = useRef({ onPlay, onEnd });
-  cb.current = { onPlay, onEnd };
+  const cb = useRef({ onPlay, onEnd, onTime });
+  cb.current = { onPlay, onEnd, onTime };
+  const ownLines = !!scene.lines?.length;
   const [blocked, setBlocked] = useState(false);
   const [ended, setEnded] = useState(false);
 
@@ -118,16 +120,15 @@ function SceneClip({ scene, playAt, muted, onPlay, onEnd }: {
         height: '100%',
         playerVars: {
           start: Math.floor(scene.start), end: Math.ceil(scene.end), controls: 0, disablekb: 1, fs: 0, rel: 0,
-          iv_load_policy: 3, playsinline: 1, cc_load_policy: 1, cc_lang_pref: 'pt', hl: 'pt', autoplay: 0,
+          iv_load_policy: 3, playsinline: 1, cc_load_policy: ownLines ? 0 : 1, cc_lang_pref: 'pt', hl: 'pt', autoplay: 0,
         },
         events: {
           onReady: () => {
             if (dead) return;
-            if (muted) player.mute();
-            else {
-              player.unMute();
-              player.setVolume(100);
-            }
+            // Sem som = volume 0 em vez de mute: o Chrome pausa vídeos mudos quando a aba
+            // perde o foco, e a gravação não pode parar no meio.
+            player.unMute();
+            player.setVolume(muted ? 0 : 100);
             if (playAt == null) return;
             const go = () => {
               if (dead) return;
@@ -147,13 +148,19 @@ function SceneClip({ scene, playAt, muted, onPlay, onEnd }: {
               started = true;
               setBlocked(false);
               try {
-                player.loadModule('captions');
-                player.setOption('captions', 'track', { languageCode: 'pt' });
+                if (ownLines) player.unloadModule('captions');
+                else {
+                  player.loadModule('captions');
+                  player.setOption('captions', 'track', { languageCode: 'pt' });
+                }
               } catch { /* sem legenda */ }
               cb.current.onPlay?.(Math.max(0, player.getCurrentTime() - scene.start));
               poll = window.setInterval(() => {
-                if (player.getCurrentTime?.() >= scene.end - 0.05) finish();
-              }, 100);
+                if (done) return;
+                const t = player.getCurrentTime?.() ?? 0;
+                cb.current.onTime?.(t);
+                if (t >= scene.end - 0.05) finish();
+              }, 50);
             }
             if (e.data === YT.PlayerState.ENDED && started) finish();
           },
@@ -195,6 +202,84 @@ function SceneClip({ scene, playAt, muted, onPlay, onEnd }: {
           ▶ Toque para assistir
         </button>
       )}
+    </div>
+  );
+}
+
+/** Vídeo + legenda de karaokê embaixo (quando a cena tem as falas com tempo). */
+function SceneClip(props: Parameters<typeof VideoClip>[0]) {
+  const { scene, playAt } = props;
+  const [t, setT] = useState<number | null>(null);
+  const lines = scene.lines;
+  return (
+    <div>
+      <VideoClip
+        {...props}
+        onTime={(x) => {
+          setT(x);
+          props.onTime?.(x);
+        }}
+      />
+      {lines?.length ? (playAt == null || t == null ? <Script lines={lines} /> : <Karaoke lines={lines} t={t} />) : null}
+    </div>
+  );
+}
+
+/** Roteiro completo, para ler antes de gravar. */
+function Script({ lines }: { lines: [number, number, string][] }) {
+  return (
+    <div className="mt-3 max-h-44 overflow-y-auto rounded-2xl border border-line bg-ink/60 px-4 py-3">
+      <p className="mb-1.5 text-[11px] font-semibold tracking-wider text-muted uppercase">Roteiro da cena</p>
+      {lines.map(([, , text], i) => (
+        <p key={i} className="text-sm leading-relaxed text-white/85">
+          {text}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Legenda de karaokê: a fala atual vai sendo pintada no ritmo em que deve ser dita,
+ * a próxima aparece embaixo e uma barra avisa quando a próxima fala vai começar.
+ */
+function Karaoke({ lines, t }: { lines: [number, number, string][]; t: number }) {
+  const idx = lines.findIndex(([a, b]) => t >= a && t < b);
+  const nextIdx = idx >= 0 ? idx + 1 : lines.findIndex(([a]) => a > t);
+  const cur = idx >= 0 ? lines[idx] : null;
+  const next = nextIdx >= 0 && nextIdx < lines.length ? lines[nextIdx] : null;
+  const progress = cur ? Math.min(100, ((t - cur[0]) / Math.max(0.3, cur[1] - cur[0])) * 100) : 0;
+  // Aviso de "prepara" no último 1,5 s antes da próxima fala.
+  const lead = !cur && next ? next[0] - t : null;
+  const ready = lead != null && lead <= 1.5 ? 1 - lead / 1.5 : 0;
+  return (
+    <div className="mt-3 rounded-2xl border border-sky/30 bg-ink/80 px-4 py-4 text-center">
+      <div className="flex min-h-[4.5rem] items-center justify-center">
+        {cur ? (
+          <p
+            key={idx}
+            className="font-display text-2xl leading-tight sm:text-4xl"
+            style={{
+              backgroundImage: `linear-gradient(90deg, var(--color-sky) ${progress}%, rgb(255 255 255 / 0.9) ${progress}%)`,
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              color: 'transparent',
+            }}
+          >
+            {cur[2]}
+          </p>
+        ) : next ? (
+          <div className="w-full">
+            <p className="text-sm font-semibold tracking-wider text-muted uppercase">{ready > 0 ? 'Prepara…' : 'Pausa'}</p>
+            <div className="mx-auto mt-2 h-2 w-48 overflow-hidden rounded-full bg-panel-2">
+              <div className="h-full rounded-full bg-sky" style={{ width: `${ready * 100}%` }} />
+            </div>
+          </div>
+        ) : (
+          <p className="text-muted">🎬 Fim das falas</p>
+        )}
+      </div>
+      <p className="mt-2 min-h-[1.5rem] truncate text-sm text-muted sm:text-base">{next ? <>Depois: <span className="text-white/70">{next[2]}</span></> : ''}</p>
     </div>
   );
 }
