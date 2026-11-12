@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { EarPublicRoom } from '../../../shared/ear';
 import type { LavaPublicRoom } from '../../../shared/lava';
+import type { LiePublicRoom } from '../../../shared/lie';
 import type { QuizPublicRoom } from '../../../shared/quiz';
 import type { StopPublicRoom } from '../../../shared/stop';
 import type { GameFx, PublicRoom } from '../../../shared/types';
@@ -9,6 +10,7 @@ import { isSoundOn, setSoundOn, sfx } from '../sound';
 import Arena from './Arena';
 import EarGame, { EarSettingsPanel } from './EarGame';
 import LavaGame, { LavaSettingsPanel } from './LavaGame';
+import LieGame, { LieSettingsPanel } from './LieGame';
 import { IconCopy, IconGear, IconLogout, IconMute, IconVolume, IconX, Logo } from './Icons';
 import Lobby, { SettingsPanel } from './Lobby';
 import QuizGame, { QuizSettingsPanel } from './QuizGame';
@@ -16,7 +18,7 @@ import StopGame, { StopSettingsPanel } from './StopGame';
 import Victory from './Victory';
 
 interface Props {
-  room: PublicRoom | StopPublicRoom | QuizPublicRoom | EarPublicRoom | LavaPublicRoom;
+  room: PublicRoom | StopPublicRoom | QuizPublicRoom | EarPublicRoom | LavaPublicRoom | LiePublicRoom;
   meId: string;
   connected: boolean;
   onLeave: () => void;
@@ -51,10 +53,10 @@ export default function RoomView({ room, meId, connected, onLeave }: Props) {
   });
 
   useEffect(() => {
-    const game = room.kind === 'stop' ? 'Stop' : room.kind === 'quiz' ? 'Chutômetro' : room.kind === 'ear' ? 'Ouvidão' : room.kind === 'lava' ? 'Torre de Lava' : 'Pavio Curto';
+    const game = room.kind === 'stop' ? 'Stop' : room.kind === 'quiz' ? 'Chutômetro' : room.kind === 'ear' ? 'Ouvidão' : room.kind === 'lava' ? 'Torre de Lava' : room.kind === 'lie' ? 'Mentirômetro' : 'Pavio Curto';
     const letter = room.kind === 'stop' ? room.letter : room.kind === 'pavio' ? room.game?.letter : '';
     const live = room.phase !== 'lobby' && room.phase !== 'ended';
-    document.title = live && room.kind === 'lava' ? `Rodada ${room.round} · ${game}` : live && room.kind === 'ear' ? `Palavra ${room.round} · ${game}` : live && room.kind === 'quiz' ? `Pergunta ${room.number} · ${game}` : live && letter ? `Letra ${letter} · ${game}` : `Sala #${room.code} · ${game}`;
+    document.title = live && room.kind === 'lie' ? `Rodada ${room.round} · ${game}` : live && room.kind === 'lava' ? `Rodada ${room.round} · ${game}` : live && room.kind === 'ear' ? `Palavra ${room.round} · ${game}` : live && room.kind === 'quiz' ? `Pergunta ${room.number} · ${game}` : live && letter ? `Letra ${letter} · ${game}` : `Sala #${room.code} · ${game}`;
   }, [room]);
 
   const me = room.kind === 'pavio' ? room.players.find((p) => p.id === meId) : undefined;
@@ -109,6 +111,8 @@ export default function RoomView({ room, meId, connected, onLeave }: Props) {
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-4 sm:py-6">
         {room.kind === 'stop' ? (
           <StopGame room={room} meId={meId} isHost={isHost} onCopy={copyInvite} />
+        ) : room.kind === 'lie' ? (
+          <LieGame room={room} meId={meId} isHost={isHost} onCopy={copyInvite} />
         ) : room.kind === 'lava' ? (
           <LavaGame room={room} meId={meId} isHost={isHost} onCopy={copyInvite} />
         ) : room.kind === 'ear' ? (
@@ -135,6 +139,8 @@ export default function RoomView({ room, meId, connected, onLeave }: Props) {
             </div>
             {room.kind === 'stop' ? (
               <StopSettingsPanel room={room} editable={isHost && room.phase === 'lobby'} />
+            ) : room.kind === 'lie' ? (
+              <LieSettingsPanel room={room} editable={isHost && room.phase === 'lobby'} />
             ) : room.kind === 'lava' ? (
               <LavaSettingsPanel room={room} editable={isHost && room.phase === 'lobby'} />
             ) : room.kind === 'ear' ? (

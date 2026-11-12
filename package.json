@@ -22,7 +22,8 @@
     "quiz:popularity": "tsx scripts/quiz-popularity.ts",
     "smoke:ear": "tsx scripts/smoke-ear.ts",
     "gen:ear-audio": "tsx scripts/gen-ear-audio.ts",
-    "smoke:lava": "tsx scripts/smoke-lava.ts"
+    "smoke:lava": "tsx scripts/smoke-lava.ts",
+    "smoke:lie": "tsx scripts/smoke-lie.ts"
   },
   "dependencies": {
     "express": "^5.3.0",

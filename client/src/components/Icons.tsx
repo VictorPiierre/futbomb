@@ -31,7 +31,7 @@ export const IconLink = (p: P) => (
   <svg {...base} {...p}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg>
 );
 
-export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game?: 'pavio' | 'stop' | 'quiz' | 'ear' | 'lava' | 'hub' }) {
+export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game?: 'pavio' | 'stop' | 'quiz' | 'ear' | 'lava' | 'lie' | 'hub' }) {
   const big = size === 'lg';
   const mark = big ? 'h-16 w-16 sm:h-20 sm:w-20' : 'h-9 w-9';
   if (game === 'hub') {
@@ -39,6 +39,14 @@ export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game
       <span className={`font-display leading-none ${big ? 'title-stroke text-5xl sm:text-6xl' : 'text-xl'}`}>
         Joga<span className="text-fire">tina</span>
       </span>
+    );
+  }
+  if (game === 'lie') {
+    return (
+      <div className={`flex items-center ${big ? 'gap-3' : 'gap-2'}`}>
+        <LieMark className={mark} />
+        <span className={`font-display leading-none text-grape ${big ? 'text-5xl sm:text-7xl' : 'text-xl'}`}>Mentirômetro</span>
+      </div>
     );
   }
   if (game === 'lava') {
@@ -81,6 +89,19 @@ export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game
         <span className="text-fire">Curto</span>
       </span>
     </div>
+  );
+}
+
+/** Marca do Mentirômetro: balão de fala com cara de quem está mentindo. */
+export function LieMark({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} aria-hidden>
+      <path d="M8 12h40a6 6 0 0 1 6 6v20a6 6 0 0 1-6 6H26l-10 9v-9H8a6 6 0 0 1-6-6V18a6 6 0 0 1 6-6Z" fill="#241c33" stroke="#b388ff" strokeWidth="3" strokeLinejoin="round" />
+      <circle cx="18" cy="26" r="3" fill="#b388ff" />
+      <circle cx="32" cy="26" r="3" fill="#b388ff" />
+      <path d="M24 30 L58 30 L60 33 L24 34 Z" fill="#ffd23f" stroke="#120d1b" strokeWidth="1.2" strokeLinejoin="round" />
+      <path d="M17 37q8 5 16 0" fill="none" stroke="#b388ff" strokeWidth="2.6" strokeLinecap="round" />
+    </svg>
   );
 }
 

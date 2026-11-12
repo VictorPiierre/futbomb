@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { AVATARS, type GameKind } from '../../../shared/types';
-import { BombMark, EarMark, LavaMark, Logo, QuizMark, StopMark } from './Icons';
+import { BombMark, EarMark, LavaMark, LieMark, Logo, QuizMark, StopMark } from './Icons';
 
 const GAMES: { id: GameKind; name: string; text: string; players: string }[] = [
   { id: 'pavio', name: 'Pavio Curto', text: 'A bomba passa de mão em mão: diga uma palavra do tema antes que ela exploda.', players: '2 a 4 jogadores' },
   { id: 'stop', name: 'Stop', text: 'Todos preenchem as categorias com a mesma letra. Quem terminar grita STOP!', players: '2 a 10 jogadores' },
   { id: 'quiz', name: 'Chutômetro', text: 'Quantos metros tem a Torre Eiffel? Todos chutam: quem chegar mais perto pontua.', players: '2 a 10 jogadores' },
   { id: 'lava', name: 'Torre de Lava', text: 'O chão é lava! Responda a conta mais rápido que todo mundo para subir sua torre. Quem sobrar vence.', players: '2 a 8 jogadores' },
+  { id: 'lie', name: 'Mentirômetro', text: 'Invente uma resposta falsa para uma curiosidade real. Engane os amigos e tente achar a verdade.', players: '2 a 10 jogadores' },
   { id: 'ear', name: 'Ouvidão', text: 'Uma voz fala uma palavra em outro idioma, uma vez só. Escreva o que ouviu: quem chegar mais perto ganha.', players: '2 a 10 jogadores' },
 ];
 
@@ -64,12 +65,12 @@ export default function Home({ initialCode, profile, error, busy, connected, onC
                 onClick={() => setGame(g.id)}
                 className={`flex cursor-pointer flex-col items-center gap-1.5 rounded-2xl border-2 p-3 last:odd:col-span-2 text-center transition sm:p-4 ${
                   game === g.id
-                    ? g.id === 'stop' ? 'border-pop bg-pop/10' : g.id === 'quiz' ? 'border-spark bg-spark/10' : g.id === 'ear' ? 'border-ok bg-ok/10' : g.id === 'lava' ? 'border-lava bg-lava/10' : 'border-fire bg-fire/10'
+                    ? g.id === 'stop' ? 'border-pop bg-pop/10' : g.id === 'quiz' ? 'border-spark bg-spark/10' : g.id === 'ear' ? 'border-ok bg-ok/10' : g.id === 'lava' ? 'border-lava bg-lava/10' : g.id === 'lie' ? 'border-grape bg-grape/10' : 'border-fire bg-fire/10'
                     : 'border-line bg-panel/60 hover:border-line hover:bg-panel'
                 }`}
               >
-                {g.id === 'stop' ? <StopMark className="h-12 w-12" /> : g.id === 'quiz' ? <QuizMark className="h-12 w-12" /> : g.id === 'ear' ? <EarMark className="h-12 w-12" /> : g.id === 'lava' ? <LavaMark className="h-12 w-12" /> : <BombMark className="h-12 w-12" />}
-                <span className={`font-display text-lg sm:text-xl ${g.id === 'stop' ? 'text-pop' : g.id === 'quiz' ? 'text-spark' : g.id === 'ear' ? 'text-ok' : g.id === 'lava' ? 'text-lava' : 'text-fire'}`}>{g.name}</span>
+                {g.id === 'stop' ? <StopMark className="h-12 w-12" /> : g.id === 'quiz' ? <QuizMark className="h-12 w-12" /> : g.id === 'ear' ? <EarMark className="h-12 w-12" /> : g.id === 'lava' ? <LavaMark className="h-12 w-12" /> : g.id === 'lie' ? <LieMark className="h-12 w-12" /> : <BombMark className="h-12 w-12" />}
+                <span className={`font-display text-lg sm:text-xl ${g.id === 'stop' ? 'text-pop' : g.id === 'quiz' ? 'text-spark' : g.id === 'ear' ? 'text-ok' : g.id === 'lava' ? 'text-lava' : g.id === 'lie' ? 'text-grape' : 'text-fire'}`}>{g.name}</span>
                 <span className="text-xs leading-snug text-muted">{g.text}</span>
                 <span className="text-[11px] font-semibold text-muted/80">{g.players}</span>
               </button>

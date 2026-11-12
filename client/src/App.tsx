@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { EarPublicRoom } from '../../shared/ear';
 import type { LavaPublicRoom } from '../../shared/lava';
+import type { LiePublicRoom } from '../../shared/lie';
 import type { QuizPublicRoom } from '../../shared/quiz';
 import type { StopPublicRoom } from '../../shared/stop';
 import type { GameKind, JoinResult, PublicRoom } from '../../shared/types';
@@ -9,7 +10,7 @@ import RoomView from './components/RoomView';
 import { codeFromPath, emitAck, loadProfile, loadSession, saveProfile, saveSession, socket, syncClock, useSocketEvent } from './net';
 
 export default function App() {
-  const [room, setRoom] = useState<PublicRoom | StopPublicRoom | QuizPublicRoom | EarPublicRoom | LavaPublicRoom | null>(null);
+  const [room, setRoom] = useState<PublicRoom | StopPublicRoom | QuizPublicRoom | EarPublicRoom | LavaPublicRoom | LiePublicRoom | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
   const [connected, setConnected] = useState(socket.connected);
   const [error, setError] = useState('');
@@ -19,7 +20,7 @@ export default function App() {
     return !!s && s.code === codeFromPath();
   });
 
-  useSocketEvent<PublicRoom | StopPublicRoom | QuizPublicRoom | EarPublicRoom | LavaPublicRoom>('room:state', (state) => {
+  useSocketEvent<PublicRoom | StopPublicRoom | QuizPublicRoom | EarPublicRoom | LavaPublicRoom | LiePublicRoom>('room:state', (state) => {
     syncClock(state.serverNow);
     setRoom(state);
   });
