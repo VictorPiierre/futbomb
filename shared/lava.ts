@@ -92,6 +92,8 @@ export interface LavaPublicRoom {
   askAt: number | null;
   endsAt: number | null;
   question: string | null;
+  /** As 4 alternativas (1 certa e 3 erradas), já embaralhadas. */
+  options: number[] | null;
   answer: number | null;
   results: LavaResult[] | null;
   /** Engolidos nesta rodada (para a animação). */
@@ -99,12 +101,4 @@ export interface LavaPublicRoom {
   ranking: { playerId: string; name: string; avatar: string; place: number; score: number; left: boolean }[] | null;
   winnerId: string | null;
   serverNow: number;
-}
-
-/** Aceita "12", " -7 ", "1.000". */
-export function parseLavaAnswer(raw: string): number | null {
-  const s = raw.trim().replace(/\s+/g, '').replace(/\.(?=\d{3}\b)/g, '').replace(',', '.');
-  if (!/^-?\d+(\.\d+)?$/.test(s)) return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
 }

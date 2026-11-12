@@ -2,7 +2,7 @@ import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import type { Server } from 'socket.io';
 import {
   LAVA_COUNTDOWN_MS, LAVA_DIFFICULTIES, LAVA_MAX_PLAYERS, LAVA_RANKING_MS, LAVA_RISE_MS, LAVA_START_HEIGHT, LAVA_TIMES,
-  climbFor, lavaRise, maxClimb, parseLavaAnswer,
+  climbFor, lavaRise, maxClimb,
   type LavaDifficulty, type LavaPhase, type LavaPublicRoom, type LavaResult, type LavaSettings,
 } from '../shared/lava.ts';
 
@@ -35,58 +35,94 @@ interface Member {
 const r = (min: number, max: number) => randomInt(min, max + 1);
 
 /** Gera uma conta de resposta inteira. */
-export function makeQuestion(d: LavaDifficulty): { text: string; answer: number } {
+/** Gera uma conta de resposta inteira com 4 alternativas. */
+export function makeQuestion(d: LavaDifficulty): { text: string; answer: number; options: number[] } {
+  const q = makeCalc(d);
+  return { ...q, options: shuffle([q.answer, ...distractors(q.answer, q.near)]) };
+}
+
+function shuffle<T>(list: T[]) {
+  const a = [...list];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/**
+ * 3 respostas erradas que parecem certas: vizinhas (±1, ±2), erro de dezena (±10),
+ * erro de tabuada (± um dos fatores) e dígitos trocados.
+ */
+function distractors(answer: number, near: number[]): number[] {
+  const close = [answer + 1, answer - 1, answer + 2, answer - 2];
+  const tricky = [answer + 10, answer - 10, ...near.flatMap((n) => [answer + n, answer - n])];
+  const swapped = Number(String(answer).split('').reverse().join(''));
+  if (answer >= 10) tricky.push(swapped);
+  const ok = (n: number) => Number.isInteger(n) && n >= 0 && n !== answer;
+  const out = new Set<number>();
+  // Uma bem perto, as outras misturando pegadinhas — assim chutar pelo "meio" não funciona.
+  const pools = [shuffle(close), shuffle([...tricky, ...close]), shuffle([...tricky, ...close])];
+  for (const pool of pools) {
+    const pick = pool.find((n) => ok(n) && !out.has(n));
+    if (pick !== undefined) out.add(pick);
+  }
+  for (let k = 3; out.size < 3; k++) if (ok(answer + k) && !out.has(answer + k)) out.add(answer + k);
+  return [...out];
+}
+
+function makeCalc(d: LavaDifficulty): { text: string; answer: number; near: number[] } {
   const kinds = d === 'easy' ? ['add', 'sub', 'mul'] : d === 'medium' ? ['add', 'sub', 'mul', 'mul', 'div'] : ['mul2', 'three', 'paren', 'sq', 'div3', 'pct'];
   const k = kinds[randomInt(kinds.length)];
   switch (k) {
     case 'add': {
       const [a, b] = d === 'easy' ? [r(1, 20), r(1, 20)] : [r(12, 99), r(12, 99)];
-      return { text: `${a} + ${b}`, answer: a + b };
+      return { text: `${a} + ${b}`, answer: a + b, near: [] };
     }
     case 'sub': {
       const a = d === 'easy' ? r(5, 20) : r(30, 99);
       const b = d === 'easy' ? r(1, a) : r(11, a - 5);
-      return { text: `${a} − ${b}`, answer: a - b };
+      return { text: `${a} − ${b}`, answer: a - b, near: [] };
     }
     case 'mul': {
       const [a, b] = d === 'easy' ? [r(2, 5), r(1, 10)] : [r(3, 12), r(3, 12)];
-      return { text: `${a} × ${b}`, answer: a * b };
+      return { text: `${a} × ${b}`, answer: a * b, near: [a, b] };
     }
     case 'div': {
       const b = r(2, 10);
       const q = r(2, 12);
-      return { text: `${b * q} ÷ ${b}`, answer: q };
+      return { text: `${b * q} ÷ ${b}`, answer: q, near: [] };
     }
     case 'mul2': {
       const a = r(12, 29);
       const b = r(3, 9);
-      return { text: `${a} × ${b}`, answer: a * b };
+      return { text: `${a} × ${b}`, answer: a * b, near: [a, b] };
     }
     case 'three': {
       const a = r(50, 200);
       const b = r(20, 150);
       const c = r(10, Math.min(99, a + b - 1));
-      return { text: `${a} + ${b} − ${c}`, answer: a + b - c };
+      return { text: `${a} + ${b} − ${c}`, answer: a + b - c, near: [] };
     }
     case 'paren': {
       const a = r(2, 15);
       const b = r(2, 15);
       const c = r(2, 6);
-      return { text: `(${a} + ${b}) × ${c}`, answer: (a + b) * c };
+      return { text: `(${a} + ${b}) × ${c}`, answer: (a + b) * c, near: [c, a + b] };
     }
     case 'sq': {
       const a = r(11, 20);
-      return { text: `${a}²`, answer: a * a };
+      return { text: `${a}²`, answer: a * a, near: [a] };
     }
     case 'div3': {
       const b = r(3, 9);
       const q = r(15, 60);
-      return { text: `${b * q} ÷ ${b}`, answer: q };
+      return { text: `${b * q} ÷ ${b}`, answer: q, near: [] };
     }
     default: {
       const p = [10, 20, 25, 50][randomInt(4)];
       const base = p === 25 ? r(2, 24) * 20 : r(2, 30) * 10;
-      return { text: `${p}% de ${base}`, answer: (base * p) / 100 };
+      return { text: `${p}% de ${base}`, answer: (base * p) / 100, near: [base / 10] };
     }
   }
 }
@@ -102,7 +138,7 @@ export class LavaRoom {
 
   private round = 0;
   private lava = 0;
-  private question: { text: string; answer: number } | null = null;
+  private question: { text: string; answer: number; options: number[] } | null = null;
   private askAt: number | null = null;
   private endsAt: number | null = null;
   private results: LavaResult[] | null = null;
@@ -309,8 +345,8 @@ export class LavaRoom {
     if (!m || m.role !== 'player') return { ok: false, error: 'Você está assistindo.' };
     if (this.phase !== 'question') return { ok: false, error: 'Agora não dá para responder.' };
     if (m.answer !== null) return { ok: false, error: 'Você já respondeu.' };
-    const value = parseLavaAnswer(String(raw ?? '').slice(0, 20));
-    if (value === null) return { ok: false, error: 'Digite só o número.' };
+    const value = Number(raw);
+    if (!this.question!.options.includes(value)) return { ok: false, error: 'Escolha uma das alternativas.' };
     m.answer = value;
     m.answeredAt = Date.now();
     this.broadcast();
@@ -452,6 +488,7 @@ export class LavaRoom {
       askAt: this.phase === 'countdown' || this.phase === 'question' ? this.askAt : null,
       endsAt: this.endsAt,
       question: asked ? (this.question?.text ?? null) : null,
+      options: asked ? (this.question?.options ?? null) : null,
       answer: revealed ? (this.question?.answer ?? null) : null,
       results: revealed ? this.results : null,
       swallowed: this.phase === 'rise' ? this.swallowed : [],

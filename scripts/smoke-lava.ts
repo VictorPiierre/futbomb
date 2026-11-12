@@ -87,20 +87,27 @@ while (true) {
   await waitFor(() => a.state?.phase === 'question');
   const q = a.state!.question!;
   const ans = solve(q);
+  const opts = a.state!.options!;
+  const wrong = opts.find((o) => o !== ans)!;
+  if (round === 1) {
+    check(opts.length === 4 && new Set(opts).size === 4 && opts.includes(ans), `4 alternativas diferentes com a certa: ${opts.join(' | ')}`);
+    const outside = await c.emit<{ ok: boolean }>('lava:answer', 99999);
+    check(!outside.ok, 'resposta fora das alternativas é recusada');
+  }
   const cAlive = a.state!.players.find((p) => p.id === c.id)!.alive;
   // Ana acerta primeiro, Beto acerta depois, Caio erra (e continua respondendo como fantasma).
-  const ra = await a.emit<{ ok: boolean; correct: boolean }>('lava:answer', String(ans));
+  const ra = await a.emit<{ ok: boolean; correct: boolean }>('lava:answer', ans);
   if (round === 1) {
     check(ra.correct, `rodada 1: ${q} = ${ans} — Ana acertou`);
-    const again = await a.emit<{ ok: boolean }>('lava:answer', '0');
+    const again = await a.emit<{ ok: boolean }>('lava:answer', wrong);
     check(!again.ok, 'só vale a primeira resposta');
   }
   await sleep(60);
   const bAlive = a.state!.players.find((p) => p.id === b.id)!.alive;
   // A partir da 5ª, Beto erra para a partida acabar.
-  await b.emit('lava:answer', String(round >= 5 ? ans + 1 : ans));
+  await b.emit('lava:answer', round >= 5 ? wrong : ans);
   await sleep(30);
-  await c.emit('lava:answer', String(ans + 1));
+  await c.emit('lava:answer', wrong);
   await waitFor(() => a.state?.phase === 'ranking', 5000);
   const res = a.state!.results!;
   const ra2 = res.find((x) => x.playerId === a.id)!;

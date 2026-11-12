@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   LAVA_DIFFICULTIES, LAVA_MAX_PLAYERS, LAVA_START_HEIGHT, LAVA_TIMES,
   type LavaDifficulty, type LavaPlayer, type LavaPublicRoom, type LavaSettings,
@@ -6,7 +6,7 @@ import {
 import { emitAck, inviteLink, serverNow, socket, useSocketEvent } from '../net';
 import { sfx } from '../sound';
 import Avatar from './Avatar';
-import { IconCopy, IconCrown, IconLink, IconSend, LavaMark } from './Icons';
+import { IconCopy, IconCrown, IconLink, LavaMark } from './Icons';
 
 interface Props {
   room: LavaPublicRoom;
@@ -42,7 +42,8 @@ export default function LavaGame(props: Props) {
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
       <Towers room={room} meId={meId} />
-      <section className="glass h-fit rounded-3xl p-5">
+      {/* No celular a pergunta fica em cima, para as alternativas caberem sem rolar. */}
+      <section className="glass order-first h-fit rounded-3xl p-4 sm:p-5 lg:order-none">
         {room.phase === 'countdown' && <Countdown room={room} />}
         {room.phase === 'question' && <Question key={room.round} room={room} meId={meId} />}
         {room.phase === 'ranking' && <Ranking room={room} meId={meId} />}
@@ -54,9 +55,19 @@ export default function LavaGame(props: Props) {
 
 // ---------- torres ----------
 
-const AREA = 300;
+function useArea() {
+  const get = () => (window.innerWidth < 640 ? 190 : 300);
+  const [area, setArea] = useState(get);
+  useEffect(() => {
+    const on = () => setArea(get());
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+  return area;
+}
 
 function Towers({ room, meId }: { room: LavaPublicRoom; meId: string }) {
+  const AREA = useArea();
   const players = room.players;
   const maxH = Math.max(LAVA_START_HEIGHT, ...players.map((p) => p.height));
   const lo = Math.max(0, Math.min(room.lava - 2, maxH - 10));
@@ -151,29 +162,31 @@ function Countdown({ room }: { room: LavaPublicRoom }) {
   );
 }
 
+const KEYS = ['A', 'B', 'C', 'D'];
+
 function Question({ room, meId }: { room: LavaPublicRoom; meId: string }) {
   const me = room.players.find((p) => p.id === meId);
   const now = useNow(true);
   const total = room.settings.answerTime * 1000;
   const left = Math.max(0, (room.endsAt ?? 0) - now);
-  const [text, setText] = useState('');
-  const [sent, setSent] = useState<{ answer: string; correct?: boolean; timeMs?: number } | null>(() =>
-    mine.round === room.round && mine.answer !== null ? { answer: String(mine.answer) } : null,
+  const options = room.options ?? [];
+  const [sent, setSent] = useState<{ answer: number; correct?: boolean; timeMs?: number } | null>(() =>
+    mine.round === room.round && mine.answer !== null ? { answer: mine.answer } : null,
   );
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
 
   useSocketEvent<typeof mine>('lava:mine', (p) => {
-    if (p.round === room.round && p.answer !== null) setSent({ answer: String(p.answer) });
+    if (p.round === room.round && p.answer !== null) setSent({ answer: p.answer });
   });
-  useEffect(() => inputRef.current?.focus(), []);
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!text.trim() || sent) return;
-    const res = await emitAck<{ ok: boolean; correct?: boolean; timeMs?: number; error?: string }>('lava:answer', text);
+  async function choose(value: number) {
+    if (sent || busy || !me) return;
+    setBusy(true);
+    const res = await emitAck<{ ok: boolean; correct?: boolean; timeMs?: number; error?: string }>('lava:answer', value);
+    setBusy(false);
     if (res.ok) {
-      setSent({ answer: text.trim(), correct: res.correct, timeMs: res.timeMs });
+      setSent({ answer: value, correct: res.correct, timeMs: res.timeMs });
       if (res.correct) sfx.correct();
       else sfx.wrong();
     } else {
@@ -182,45 +195,61 @@ function Question({ room, meId }: { room: LavaPublicRoom; meId: string }) {
     }
   }
 
+  // Atalhos: 1-4 ou A-D no teclado.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const k = e.key.toUpperCase();
+      const i = ['1', '2', '3', '4'].indexOf(k) >= 0 ? Number(k) - 1 : KEYS.indexOf(k);
+      if (i >= 0 && options[i] !== undefined) void choose(options[i]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   return (
     <div>
       <p className="text-center text-xs font-semibold tracking-[0.2em] text-muted uppercase">Quanto é</p>
-      <p className="pop-in my-2 text-center font-display text-5xl sm:text-6xl">{room.question} = ?</p>
+      <p className="pop-in my-1 text-center font-display text-4xl sm:my-2 sm:text-6xl">{room.question} = ?</p>
       <div className="h-2.5 overflow-hidden rounded-full bg-panel-2">
         <div className={`h-full rounded-full ${left < 3000 ? 'bg-danger' : 'bg-lava'}`} style={{ width: `${(left / total) * 100}%` }} />
       </div>
       <p className="mt-1 text-right font-display text-lg tabular-nums text-muted">{Math.ceil(left / 1000)}s</p>
       {!me ? (
         <p className="rounded-xl bg-panel-2 p-3 text-center text-sm text-muted">Você está assistindo esta partida.</p>
-      ) : sent ? (
-        <div className={`pop-in rounded-2xl border px-4 py-4 text-center ${sent.correct === false ? 'border-danger/50 bg-danger/10' : 'border-ok/40 bg-ok/10'}`}>
-          <p className="font-display text-3xl">
-            {sent.answer} {sent.correct === true ? '✅' : sent.correct === false ? '❌' : ''}
-          </p>
-          {sent.timeMs !== undefined && <p className="text-sm text-muted">respondeu em {secs(sent.timeMs)}</p>}
-          <p className="mt-1 text-xs text-muted">Esperando os outros…</p>
-        </div>
       ) : (
-        <form onSubmit={submit}>
-          {!me.alive && <p className="mb-2 text-center text-xs text-muted">👻 A lava te pegou, mas você ainda pode responder por diversão.</p>}
-          <div className="flex gap-2">
-            <input
-              ref={inputRef}
-              value={text}
-              inputMode="numeric"
-              autoComplete="off"
-              maxLength={12}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Resposta"
-              className="min-w-0 flex-1 rounded-2xl border-2 border-lava/50 bg-panel-2 px-4 py-4 text-center font-display text-3xl outline-none placeholder:font-sans placeholder:text-base placeholder:text-muted focus:border-lava focus:ring-4 focus:ring-lava/15"
-            />
-            <button disabled={!text.trim()} className="btn-primary flex items-center gap-2 rounded-2xl px-5">
-              <IconSend width={18} />
-            </button>
+        <>
+          {!me.alive && !sent && <p className="mb-2 text-center text-xs text-muted">👻 A lava te pegou, mas você ainda pode responder por diversão.</p>}
+          <div className="grid grid-cols-2 gap-2.5">
+            {options.map((o, i) => {
+              const picked = sent?.answer === o;
+              const cls = picked
+                ? sent?.correct === false ? 'border-danger bg-danger/20 text-white' : 'border-ok bg-ok/20 text-white'
+                : sent ? 'border-line bg-panel-2 opacity-40' : 'border-lava/40 bg-panel-2 hover:border-lava hover:bg-lava/10 active:scale-95';
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  disabled={!!sent || busy}
+                  onClick={() => void choose(o)}
+                  className={`pop-in relative flex cursor-pointer items-center justify-center rounded-2xl border-2 py-4 font-display text-3xl sm:py-5 transition disabled:cursor-default sm:text-4xl ${cls}`}
+                  style={{ animationDelay: `${i * 60}ms` }}
+                >
+                  <span className="absolute top-1.5 left-2.5 font-sans text-[11px] font-bold text-muted">{KEYS[i]}</span>
+                  {o}
+                  {picked && sent?.correct !== undefined && <span className="absolute top-1.5 right-2.5 text-base">{sent.correct ? '✅' : '❌'}</span>}
+                </button>
+              );
+            })}
           </div>
-          <p className="mt-2 text-center text-xs text-muted">Só vale a primeira resposta — capricha na velocidade!</p>
+          <p className="mt-2 min-h-5 text-center text-xs text-muted">
+            {sent
+              ? sent.timeMs !== undefined
+                ? `Respondeu em ${secs(sent.timeMs)} — esperando os outros…`
+                : 'Resposta enviada — esperando os outros…'
+              : 'Toque na resposta certa. Só vale o primeiro toque — capricha na velocidade!'}
+          </p>
           {error && <p className="mt-1 text-center text-sm text-danger">{error}</p>}
-        </form>
+        </>
       )}
     </div>
   );
@@ -339,7 +368,7 @@ function LavaLobby({ room, meId, isHost, onCopy }: Props) {
 
         <div className="mt-6 rounded-2xl bg-panel/60 p-4 text-sm text-muted">
           <p className="mb-1 font-semibold text-white">Como funciona</p>
-          O chão é lava! Cada um tem uma torre de {LAVA_START_HEIGHT} blocos. A cada rodada aparece uma conta depois do “3… 2… 1…” — responda rápido:
+          O chão é lava! Cada um tem uma torre de {LAVA_START_HEIGHT} blocos. A cada rodada aparece uma conta depois do “3… 2… 1…”, com 4 alternativas — toque na certa o mais rápido que puder:
           quem acerta primeiro sobe <b className="text-ok">mais blocos</b>, o segundo um a menos, e assim por diante. Errou? Não sobe nada.
           Depois a <b className="text-lava">lava sobe</b> — e ela sobe cada vez mais. Quem for engolido vira espectador (mas pode continuar respondendo por diversão).
           <b className="text-white"> Ganha quem sobrar!</b>
