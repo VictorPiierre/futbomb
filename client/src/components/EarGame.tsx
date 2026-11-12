@@ -244,7 +244,7 @@ export function EarSettingsPanel({ room, editable }: { room: EarPublicRoom; edit
         ))}
       </Row>
       <p className="-mt-3 text-[11px] text-muted">{EAR_DIFFICULTIES[s.difficulty].hint}</p>
-      <Row label="Palavras na partida">
+      <Row label="Rodadas">
         {EAR_ROUNDS.map((n) => (
           <button key={n} disabled={!editable} onClick={() => set({ rounds: n })} className={`${chip(s.rounds === n)} flex-1`}>
             {n}
