@@ -1,22 +1,21 @@
 import { normalize } from './normalize.ts';
 import type { PublicSpectator } from './types.ts';
 
-/** Idiomas (temas). `voice` é o código usado na voz do navegador. */
+/** Idiomas (temas). Os áudios são gerados pelo Piper (scripts/gen-ear-audio.ts). */
 export const EAR_LANGS = {
-  en: { label: 'Inglês', flag: '🇺🇸', voice: 'en-US', hint: '' },
-  es: { label: 'Espanhol', flag: '🇪🇸', voice: 'es-ES', hint: '' },
-  fr: { label: 'Francês', flag: '🇫🇷', voice: 'fr-FR', hint: '' },
-  it: { label: 'Italiano', flag: '🇮🇹', voice: 'it-IT', hint: '' },
-  de: { label: 'Alemão', flag: '🇩🇪', voice: 'de-DE', hint: '' },
-  ja: { label: 'Japonês', flag: '🇯🇵', voice: 'ja-JP', hint: 'escreva como se fala, com letras (ex.: arigatou)' },
+  en: { label: 'Inglês', flag: '🇺🇸' },
+  es: { label: 'Espanhol', flag: '🇪🇸' },
+  fr: { label: 'Francês', flag: '🇫🇷' },
+  it: { label: 'Italiano', flag: '🇮🇹' },
+  de: { label: 'Alemão', flag: '🇩🇪' },
 } as const;
 export type EarLang = keyof typeof EAR_LANGS;
 export const EAR_LANG_IDS = Object.keys(EAR_LANGS) as EarLang[];
 
 export const EAR_DIFFICULTIES = {
-  easy: { label: 'Fácil', hint: 'palavras curtas e conhecidas, faladas devagar', rate: 0.8 },
-  medium: { label: 'Médio', hint: 'palavras maiores e menos comuns', rate: 0.95 },
-  hard: { label: 'Difícil', hint: 'frases e palavras cabeludas, na velocidade normal', rate: 1.05 },
+  easy: { label: 'Fácil', hint: 'palavras curtas e conhecidas, faladas devagar' },
+  medium: { label: 'Médio', hint: 'palavras maiores e menos comuns' },
+  hard: { label: 'Difícil', hint: 'frases e palavras cabeludas, na velocidade normal' },
 } as const;
 export type EarDifficulty = keyof typeof EAR_DIFFICULTIES;
 
@@ -27,7 +26,7 @@ export const EAR_MAX_PLAYERS = [4, 6, 8, 10] as const;
 /** Contagem "Palavra em 3… 2… 1…" antes da voz. */
 export const EAR_COUNTDOWN_MS = 3_000;
 /** Tempo reservado para a voz falar antes de começar a contar o tempo de resposta. */
-export const EAR_SPEAK_MS = 2_500;
+export const EAR_SPEAK_MS = 2_800;
 export const EAR_REVEAL_MS = 10_000;
 /** Pontos: escrita perfeita, e o máximo para quem chegou perto. */
 export const EAR_EXACT_POINTS = 10;
@@ -82,33 +81,19 @@ export interface EarPublicRoom {
   speakAt: number | null;
   endsAt: number | null;
   /** Só aparece na revelação. */
-  word: { say: string; answers: string[]; meaning: string } | null;
+  word: { say: string; answers: string[]; meaning: string; audio: string } | null;
   results: EarResult[] | null;
   ranking: { playerId: string; name: string; avatar: string; place: number; score: number; left: boolean }[] | null;
   winnerId: string | null;
   serverNow: number;
 }
 
-/** Texto que a voz vai falar (embaralhado para não ficar à vista no estado da sala). */
+/** Aviso da palavra da rodada: só o nome do arquivo de áudio (não revela a palavra). */
 export interface EarSay {
   round: number;
   lang: EarLang;
-  rate: number;
   speakAt: number;
-  blob: string;
-}
-
-const KEY = 'ouvidao';
-export function scramble(text: string): string {
-  const bytes = new TextEncoder().encode(text).map((b, i) => b ^ KEY.charCodeAt(i % KEY.length));
-  let bin = '';
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
-}
-export function unscramble(blob: string): string {
-  const bin = atob(blob);
-  const bytes = Uint8Array.from(bin, (c, i) => c.charCodeAt(0) ^ KEY.charCodeAt(i % KEY.length));
-  return new TextDecoder().decode(bytes);
+  audio: string;
 }
 
 /** Compara ignorando acentos, maiúsculas, pontuação e espaços. */

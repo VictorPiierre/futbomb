@@ -3,7 +3,12 @@
  * Uso: com o servidor rodando -> npm run smoke:ear
  */
 import { io, type Socket } from 'socket.io-client';
-import { unscramble, type EarPublicRoom, type EarSay } from '../shared/ear.ts';
+import type { EarPublicRoom, EarSay } from '../shared/ear.ts';
+import { EAR_WORDS } from '../server/ear-words.ts';
+import fs from 'node:fs';
+
+const byAudio = new Map(Object.values(EAR_WORDS).flatMap((d) => Object.values(d).flat()).map((w) => [w.audio, w]));
+const unscramble = (audio: string) => byAudio.get(audio)!.say;
 import type { JoinResult } from '../shared/types.ts';
 
 const URL = process.env.URL ?? 'http://localhost:3000';
@@ -45,28 +50,27 @@ await waitFor(() => a.state?.players.length === 3);
 check(a.state?.kind === 'ear', 'sala do Ouvidão criada com 3 jogadores');
 
 b.socket.emit('room:settings', { rounds: 15 });
-a.socket.emit('room:settings', { langs: ['ja'], rounds: 5, difficulty: 'hard', answerTime: 10 });
+a.socket.emit('room:settings', { langs: ['de'], rounds: 5, difficulty: 'hard', answerTime: 10 });
 await waitFor(() => a.state?.settings.rounds === 5);
-check(a.state?.settings.langs.join() === 'ja' && a.state.settings.difficulty === 'hard', 'anfitrião configura (só japonês, difícil, 5 palavras)');
+check(a.state?.settings.langs.join() === 'de' && a.state.settings.difficulty === 'hard', 'anfitrião configura (só alemão, difícil, 5 palavras)');
 
 await a.emit('game:start');
 for (let round = 1; round <= 5; round++) {
   await waitFor(() => a.state?.phase === 'question' && a.state.round === round && c.say?.round === round);
   const say = c.say!;
-  check(say.lang === 'ja' && a.state!.word === null, `rodada ${round}: palavra chega embaralhada e não aparece no estado`);
+  check(say.lang === 'de' && a.state!.word === null && /^[0-9a-f]{12}$/.test(say.audio), `rodada ${round}: só o id do áudio chega antes, a palavra não aparece`);
+  check(fs.existsSync(`client/public/ear/${say.audio}.mp3`), `rodada ${round}: arquivo de áudio existe`);
   if (round === 1) {
     const early = await b.emit<{ ok: boolean }>('ear:answer', 'arigatou');
     check(!early.ok, 'não dá para responder antes da palavra ser dita');
   }
   await waitFor(() => Date.now() > say.speakAt + 50, 6000);
-  const spoken = unscramble(say.blob);
-  check(spoken.length > 0 && !/^[a-z ]+$/.test(spoken), 'texto da fala é japonês');
-  await a.emit('ear:answer', 'xyz');
+    await a.emit('ear:answer', 'xyz');
   await b.emit('ear:answer', 'abc');
   await c.emit('ear:answer', 'zzz');
   await waitFor(() => a.state?.phase === 'reveal', 5000);
   const w = a.state!.word!;
-  check(w && w.answers.length > 0 && w.meaning, `revelação: ${w.say} = ${w.answers[0]} (“${w.meaning}”)`);
+  check(w && w.audio === say.audio && w.meaning, `revelação: ${w.say} (“${w.meaning}”)`);
   a.socket.emit('ear:next');
 }
 await waitFor(() => a.state?.phase === 'ended');
@@ -79,7 +83,7 @@ await waitFor(() => a.state?.phase === 'lobby' && a.state.settings.langs.join() 
 await a.emit('game:start');
 await waitFor(() => a.state?.phase === 'question' && b.say?.round === 1);
 await waitFor(() => Date.now() > b.say!.speakAt + 50, 6000);
-const word = unscramble(b.say!.blob);
+const word = unscramble(b.say!.audio);
 await b.emit('ear:answer', word.toUpperCase());
 await c.emit('ear:answer', word.slice(0, -1) + (word.endsWith('x') ? 'y' : 'x'));
 await a.emit('ear:answer', 'qqqqqqqqqq');

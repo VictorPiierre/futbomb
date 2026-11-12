@@ -1,8 +1,9 @@
+import { createHash } from 'node:crypto';
 import type { EarDifficulty, EarLang } from '../shared/ear.ts';
 
 /**
  * Banco do Ouvidão. Formato: "fala|significado" ou "fala=resposta1/resposta2|significado"
- * (quando o que se escreve é diferente do que a voz lê, como no japonês).
+ * (quando se aceita mais de uma forma de escrever).
  */
 const RAW: Record<EarLang, Record<EarDifficulty, string[]>> = {
   en: {
@@ -111,34 +112,6 @@ const RAW: Record<EarLang, Record<EarDifficulty, string[]>> = {
       'Entschuldigung|com licença / desculpa', 'Fußballweltmeisterschaft|Copa do Mundo de futebol', 'Schlüsselbund|molho de chaves',
     ],
   },
-  ja: {
-    easy: [
-      'ありがとう=arigatou/arigato|obrigado', 'こんにちは=konnichiwa/konnichiha|olá', 'ねこ=neko|gato', 'いぬ=inu|cachorro', 'すし=sushi|sushi',
-      'みず=mizu|água', 'はい=hai|sim', 'いいえ=iie|não', 'さくら=sakura|cerejeira', 'ともだち=tomodachi|amigo', 'おはよう=ohayou/ohayo|bom dia',
-      'さようなら=sayounara/sayonara|tchau', 'かわいい=kawaii|fofo', 'ラーメン=ramen/raamen|lámen', 'やま=yama|montanha', 'うみ=umi|mar',
-      'はな=hana|flor', 'ほん=hon|livro', 'くるま=kuruma|carro', 'たまご=tamago|ovo',
-    ],
-    medium: [
-      'いただきます=itadakimasu|bom apetite', 'すみません=sumimasen|com licença', 'おいしい=oishii|gostoso', 'たべもの=tabemono|comida',
-      'でんしゃ=densha|trem', 'ひこうき=hikouki/hikoki|avião', 'しんかんせん=shinkansen|trem-bala', 'さかな=sakana|peixe',
-      'たんじょうび=tanjoubi/tanjobi|aniversário', 'てがみ=tegami|carta', 'がっこう=gakkou/gakko|escola', 'せんせい=sensei|professor',
-      'にほんご=nihongo|língua japonesa', 'おやすみなさい=oyasuminasai|boa noite', 'だいじょうぶ=daijoubu/daijobu|tudo bem',
-      'きれい=kirei|bonito', 'ともだちです=tomodachidesu/tomodachi desu|é amigo', 'おかあさん=okaasan/okasan|mãe', 'ちかてつ=chikatetsu|metrô',
-      'つなみ=tsunami|tsunami',
-    ],
-    hard: [
-      'よろしくおねがいします=yoroshikuonegaishimasu/yoroshiku onegaishimasu|prazer / conto com você', 'おつかれさまでした=otsukaresamadeshita/otsukaresama deshita|bom trabalho',
-      'ごちそうさまでした=gochisousamadeshita/gochisosama deshita|obrigado pela refeição', 'はじめまして=hajimemashite|muito prazer',
-      'にほんごがすきです=nihongogasukidesu/nihongo ga suki desu|eu gosto de japonês', 'とうきょうとっきょきょかきょく=toukyoutokkyokyokakyoku/tokyo tokkyo kyoka kyoku|escritório de patentes de Tóquio',
-      'なまむぎなまごめなまたまご=namamuginamagomenamatamago/namamugi namagome namatamago|trigo cru, arroz cru, ovo cru',
-      'いらっしゃいませ=irasshaimase|seja bem-vindo', 'ちょっとまってください=chottomattekudasai/chotto matte kudasai|espere um pouco, por favor',
-      'すもももももももものうち=sumomomomomomomomonouchi/sumomo mo momo mo momo no uchi|ameixa e pêssego são da família do pêssego',
-      'かいしゃいん=kaishain|funcionário de empresa', 'きっさてん=kissaten|cafeteria', 'としょかん=toshokan|biblioteca',
-      'おめでとうございます=omedetougozaimasu/omedetou gozaimasu|parabéns', 'しゅっぱつ=shuppatsu|partida', 'りょうり=ryouri/ryori|culinária',
-      'きょうはいいてんきですね=kyouwaiitenkidesune/kyou wa ii tenki desu ne|hoje o tempo está bom, né',
-      'ぎゅうにゅう=gyuunyuu/gyunyu|leite', 'びょういん=byouin/byoin|hospital', 'じゅうしょ=juusho/jusho|endereço',
-    ],
-  },
 };
 
 export interface EarWord {
@@ -147,6 +120,12 @@ export interface EarWord {
   say: string;
   answers: string[];
   meaning: string;
+  /** Nome do arquivo de áudio em client/public/ear (gerado por scripts/gen-ear-audio.ts). */
+  audio: string;
+}
+
+export function audioId(lang: string, diff: string, say: string) {
+  return createHash('sha1').update(`${lang}|${diff}|${say}`).digest('hex').slice(0, 12);
 }
 
 export const EAR_WORDS: Record<EarLang, Record<EarDifficulty, EarWord[]>> = Object.fromEntries(
@@ -160,7 +139,7 @@ export const EAR_WORDS: Record<EarLang, Record<EarDifficulty, EarWord[]>> = Obje
           const [say, alts] = left.split('=');
           // Apóstrofo tipográfico: a voz lê o texto original, a resposta aceita os dois.
           const answers = (alts ? alts.split('/') : [say]).map((a) => a.replace(/’/g, "'"));
-          return { id: `${lang}-${diff}-${i}`, lang: lang as EarLang, say, answers, meaning };
+          return { id: `${lang}-${diff}-${i}`, lang: lang as EarLang, say, answers, meaning, audio: audioId(lang, diff, say) };
         }),
       ]),
     ),

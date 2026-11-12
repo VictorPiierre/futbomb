@@ -21,8 +21,9 @@ export function setSoundOn(on: boolean) {
   }
 }
 
-function audio() {
-  if (!enabled) return null;
+/** Contexto de áudio, mesmo com os efeitos desligados (o Ouvidão precisa tocar a palavra). */
+export function audioCtx() {
+  if (typeof window === 'undefined') return null;
   if (!ctx) {
     const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AC) return null;
@@ -32,9 +33,13 @@ function audio() {
   return ctx;
 }
 
+function audio() {
+  return enabled ? audioCtx() : null;
+}
+
 // Navegadores só liberam áudio após interação do usuário.
 if (typeof window !== 'undefined') {
-  const unlock = () => audio();
+  const unlock = () => audioCtx();
   window.addEventListener('pointerdown', unlock, { once: true });
   window.addEventListener('keydown', unlock, { once: true });
 }

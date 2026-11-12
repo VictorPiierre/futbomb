@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   EAR_BEST_BONUS, EAR_DIFFICULTIES, EAR_EXACT_POINTS, EAR_LANG_IDS, EAR_LANGS, EAR_MAX_PLAYERS, EAR_NEAR_MAX, EAR_ROUNDS, EAR_SPEAK_MS, EAR_TIMES,
-  diffLetters, earNorm, unscramble,
+  diffLetters, earNorm,
   type EarDifficulty, type EarLang, type EarPublicRoom, type EarSay, type EarSettings,
 } from '../../../shared/ear';
 import { emitAck, inviteLink, serverNow, socket, useSocketEvent } from '../net';
-import { sfx } from '../sound';
+import { audioCtx, sfx } from '../sound';
 import Avatar from './Avatar';
 import { EarMark, IconCopy, IconCrown, IconLink, IconSend } from './Icons';
 
@@ -16,64 +16,72 @@ interface Props {
   onCopy: () => void;
 }
 
-// ---------- voz ----------
+// ---------- áudio ----------
 
 /** Última palavra recebida (fica fora do React para sobreviver a remontagens). */
 let pending: EarSay | null = null;
-/** Rodadas já faladas: a palavra só é dita uma vez. */
-const spoken = new Set<string>();
+/** Rodadas já tocadas: a palavra só é dita uma vez. */
+const played = new Set<string>();
 let mine: { round: number; answer: string | null } = { round: 0, answer: null };
-socket.on('ear:say', (p: EarSay) => (pending = p));
+socket.on('ear:say', (p: EarSay) => {
+  pending = p;
+  void load(p.audio); // baixa durante a contagem para tocar na hora certa
+});
 socket.on('ear:mine', (p: typeof mine) => (mine = p));
 
-const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
-let voices: SpeechSynthesisVoice[] = [];
-function loadVoices() {
-  voices = synth?.getVoices() ?? [];
-}
-loadVoices();
-synth?.addEventListener?.('voiceschanged', loadVoices);
-
-// Celulares só liberam a voz depois de um toque: "aquece" com uma fala vazia no primeiro toque.
-let unlocked = false;
-if (synth) {
-  const unlock = () => {
-    if (unlocked || synth.speaking || synth.pending) return;
-    unlocked = true;
-    const u = new SpeechSynthesisUtterance(' ');
-    u.volume = 0;
-    synth.speak(u);
-  };
-  window.addEventListener('pointerdown', unlock, { once: true });
-  window.addEventListener('keydown', unlock, { once: true });
+const buffers = new Map<string, Promise<AudioBuffer | null>>();
+function load(id: string) {
+  let b = buffers.get(id);
+  if (!b) {
+    b = fetch(`/ear/${id}.mp3`)
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+      .then((data) => audioCtx()!.decodeAudioData(data))
+      .catch(() => {
+        buffers.delete(id);
+        return null;
+      });
+    buffers.set(id, b);
+  }
+  return b;
 }
 
-function voiceFor(lang: EarLang) {
-  const code = EAR_LANGS[lang].voice.toLowerCase();
-  const base = code.slice(0, 2);
-  const list = voices.filter((v) => v.lang.toLowerCase().replace('_', '-').startsWith(base));
-  const score = (v: SpeechSynthesisVoice) =>
-    (v.lang.toLowerCase().replace('_', '-') === code ? 4 : 0) + (/google|natural|premium|enhanced|neural/i.test(v.name) ? 2 : 0) + (v.localService ? 0 : 1);
-  return list.sort((a, b) => score(b) - score(a))[0] ?? null;
+let playing: AudioBufferSourceNode | null = null;
+/** Toca o áudio (opcionalmente agendado para um horário do servidor). */
+async function play(id: string, at?: number) {
+  const ctx = audioCtx();
+  const buf = await load(id);
+  if (!ctx || !buf) return false;
+  try {
+    playing?.stop();
+  } catch {
+    /* já tinha parado */
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctx.destination);
+  src.start(ctx.currentTime + (at ? Math.max(0, (at - serverNow()) / 1000) : 0));
+  playing = src;
+  return true;
 }
 
-function speak(text: string, lang: EarLang, rate: number) {
-  if (!synth) return;
-  // Alguns navegadores (Chrome no Android) repetem a fala quando cancel() e speak() vêm colados.
-  if (synth.speaking || synth.pending) {
-    synth.cancel();
-    window.setTimeout(() => say(text, lang, rate), 120);
-  } else say(text, lang, rate);
+/** O navegador só libera o som depois de um toque na página. */
+function useAudioBlocked() {
+  const [blocked, setBlocked] = useState(() => audioCtx()?.state !== 'running');
+  useEffect(() => {
+    const id = window.setInterval(() => setBlocked(audioCtx()?.state !== 'running'), 500);
+    return () => clearInterval(id);
+  }, []);
+  return blocked;
 }
 
-function say(text: string, lang: EarLang, rate: number) {
-  if (!synth) return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = EAR_LANGS[lang].voice;
-  const v = voiceFor(lang);
-  if (v) u.voice = v;
-  u.rate = rate;
-  synth.speak(u);
+function SoundGate() {
+  const blocked = useAudioBlocked();
+  if (!blocked) return null;
+  return (
+    <button onClick={() => void audioCtx()?.resume()} className="pop-in mt-4 w-full cursor-pointer rounded-2xl border-2 border-spark bg-spark/15 py-3 font-semibold text-spark">
+      🔇 Toque aqui para ativar o som
+    </button>
+  );
 }
 
 function useNow(active: boolean) {
@@ -110,33 +118,13 @@ export default function EarGame(props: Props) {
 
 // ---------- sala de espera ----------
 
-function VoiceCheck({ langs }: { langs: EarLang[] }) {
-  const [, force] = useState(0);
-  useEffect(() => {
-    const t = window.setTimeout(() => force((n) => n + 1), 800);
-    return () => clearTimeout(t);
-  }, []);
-  if (!synth) return <p className="mt-3 rounded-xl bg-danger/10 p-3 text-sm text-danger">Este navegador não tem voz. Use o Chrome, Edge ou Safari.</p>;
-  const missing = voices.length ? langs.filter((l) => !voiceFor(l)) : [];
+function VoiceCheck() {
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2">
-      <button
-        type="button"
-        onClick={() => {
-          const u = new SpeechSynthesisUtterance('Olá! Está me ouvindo?');
-          u.lang = 'pt-BR';
-          synth.cancel();
-          synth.speak(u);
-        }}
-        className="btn-secondary px-4 text-sm"
-      >
+      <button type="button" onClick={() => void play('teste')} className="btn-secondary px-4 text-sm">
         🔊 Testar o som
       </button>
-      {missing.length > 0 && (
-        <span className="text-xs text-muted">
-          Seu aparelho não tem voz em {missing.map((l) => EAR_LANGS[l].label.toLowerCase()).join(', ')} — vai sair com sotaque estranho.
-        </span>
-      )}
+      <span className="text-xs text-muted">Se não ouvir nada, aumente o volume e tire o celular do silencioso.</span>
     </div>
   );
 }
@@ -202,7 +190,7 @@ function EarLobby({ room, meId, isHost, onCopy }: Props) {
           Escrita perfeita vale <b className="text-ok">{EAR_EXACT_POINTS}</b>; chegou perto vale até <b className="text-white">{EAR_NEAR_MAX}</b>, e quem chegar mais
           perto na rodada ganha <b className="text-spark">+{EAR_BEST_BONUS}</b>. Acentos não contam. Aumente o volume! 🔊
         </div>
-        <VoiceCheck langs={room.settings.langs} />
+        <VoiceCheck />
       </section>
 
       <aside className="glass flex flex-col rounded-3xl p-5 sm:p-6">
@@ -332,15 +320,15 @@ function EarQuestion({ room, meId }: Props) {
   // Fala a palavra na hora marcada pelo servidor — uma vez só.
   useEffect(() => {
     const fire = () => {
-      if (spoken.has(key)) return;
+      if (played.has(key)) return;
       const p = pending;
       if (!p || p.round !== room.round) return setMissed(true);
-      // Chegou atrasado demais (aba em segundo plano etc.): não fala fora de hora.
-      if (serverNow() - p.speakAt > 2500) return setMissed(true);
-      spoken.add(key);
-      speak(unscramble(p.blob), p.lang, p.rate);
+      // Chegou atrasado demais (aba em segundo plano etc.): não toca fora de hora.
+      if (serverNow() - p.speakAt > 1500) return setMissed(true);
+      played.add(key);
+      void play(p.audio, p.speakAt);
     };
-    const wait = speakAt - serverNow();
+    const wait = speakAt - serverNow() - 800;
     if (wait <= 0) {
       fire();
       return;
@@ -382,6 +370,7 @@ function EarQuestion({ room, meId }: Props) {
   return (
     <section className="glass rounded-3xl p-5 sm:p-7">
       <LangTag room={room} />
+      <SoundGate />
       {toSpeak > 0 ? (
         <div className="py-10 text-center">
           <p className="font-display text-2xl text-muted sm:text-3xl">Palavra em…</p>
@@ -395,7 +384,6 @@ function EarQuestion({ room, meId }: Props) {
           <div className="my-6 flex flex-col items-center gap-2 text-center">
             <EarMark className={`h-20 w-20 ${listening ? 'animate-pulse' : 'opacity-70'}`} />
             <p className="font-display text-2xl">{listening ? 'Escuta…' : missed ? 'Você perdeu a palavra 😢' : 'O que você ouviu?'}</p>
-            {lang?.hint && <p className="text-sm text-muted">{lang.hint}</p>}
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-panel-2">
             <div
@@ -478,7 +466,7 @@ function EarReveal({ room, meId, isHost }: Props) {
         <p className="mt-2 text-sm text-muted">
           {lang.flag} significa <b className="text-white">“{w.meaning}”</b>
         </p>
-        <button onClick={() => speak(w.say, room.lang!, EAR_DIFFICULTIES[room.settings.difficulty].rate)} className="btn-secondary mt-3 px-4 text-sm">
+        <button onClick={() => void play(w.audio)} className="btn-secondary mt-3 px-4 text-sm">
           🔊 Ouvir de novo
         </button>
       </div>

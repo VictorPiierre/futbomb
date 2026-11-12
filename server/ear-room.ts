@@ -2,7 +2,7 @@ import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import type { Server } from 'socket.io';
 import {
   EAR_BEST_BONUS, EAR_COUNTDOWN_MS, EAR_DIFFICULTIES, EAR_LANGS, EAR_MAX_PLAYERS, EAR_REVEAL_MS, EAR_ROUNDS, EAR_SPEAK_MS, EAR_TIMES,
-  earPoints, scramble, similarity,
+  earPoints, similarity,
   type EarLang, type EarPhase, type EarPublicRoom, type EarResult, type EarSay, type EarSettings,
 } from '../shared/ear.ts';
 import { EAR_WORDS, type EarWord } from './ear-words.ts';
@@ -31,7 +31,7 @@ export class EarRoom {
   readonly kind = 'ear';
   readonly code: string;
   hostId = '';
-  settings: EarSettings = { langs: ['en', 'es', 'fr', 'it', 'de', 'ja'], difficulty: 'easy', rounds: 10, answerTime: 15, maxPlayers: 10 };
+  settings: EarSettings = { langs: ['en', 'es', 'fr', 'it', 'de'], difficulty: 'easy', rounds: 10, answerTime: 15, maxPlayers: 10 };
   phase: EarPhase = 'lobby';
   members: Member[] = [];
   lastActivity = Date.now();
@@ -241,9 +241,8 @@ export class EarRoom {
     return {
       round: this.round,
       lang: this.current!.lang,
-      rate: EAR_DIFFICULTIES[this.settings.difficulty].rate,
       speakAt: this.speakAt!,
-      blob: scramble(this.current!.say),
+      audio: this.current!.audio,
     };
   }
 
@@ -357,7 +356,7 @@ export class EarRoom {
       lang: this.phase === 'lobby' ? null : (w?.lang ?? null),
       speakAt: this.phase === 'question' ? this.speakAt : null,
       endsAt: this.endsAt,
-      word: shown && w ? { say: w.say, answers: w.answers, meaning: w.meaning } : null,
+      word: shown && w ? { say: w.say, answers: w.answers, meaning: w.meaning, audio: w.audio } : null,
       results: shown ? this.results : null,
       ranking: this.ranking,
       winnerId: this.winnerId,
