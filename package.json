@@ -20,7 +20,8 @@
     "smoke:quiz": "tsx scripts/smoke-quiz.ts",
     "quiz:fame": "tsx scripts/quiz-fame.ts",
     "quiz:popularity": "tsx scripts/quiz-popularity.ts",
-    "smoke:dub": "tsx scripts/smoke-dub.ts"
+    "smoke:dub": "tsx scripts/smoke-dub.ts",
+    "smoke:ear": "tsx scripts/smoke-ear.ts"
   },
   "dependencies": {
     "express": "^5.3.0",

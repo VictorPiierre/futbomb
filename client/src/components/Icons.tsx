@@ -31,7 +31,7 @@ export const IconLink = (p: P) => (
   <svg {...base} {...p}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg>
 );
 
-export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game?: 'pavio' | 'stop' | 'quiz' | 'dub' | 'hub' }) {
+export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game?: 'pavio' | 'stop' | 'quiz' | 'dub' | 'ear' | 'hub' }) {
   const big = size === 'lg';
   const mark = big ? 'h-16 w-16 sm:h-20 sm:w-20' : 'h-9 w-9';
   if (game === 'hub') {
@@ -39,6 +39,14 @@ export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game
       <span className={`font-display leading-none ${big ? 'title-stroke text-5xl sm:text-6xl' : 'text-xl'}`}>
         Joga<span className="text-fire">tina</span>
       </span>
+    );
+  }
+  if (game === 'ear') {
+    return (
+      <div className={`flex items-center ${big ? 'gap-3' : 'gap-2'}`}>
+        <EarMark className={mark} />
+        <span className={`font-display leading-none text-ok ${big ? 'text-5xl sm:text-7xl' : 'text-xl'}`}>Ouvidão</span>
+      </div>
     );
   }
   if (game === 'dub') {
@@ -73,6 +81,19 @@ export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game
         <span className="text-fire">Curto</span>
       </span>
     </div>
+  );
+}
+
+/** Marca do Ouvidão: orelha com ondas de som. */
+export function EarMark({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} aria-hidden>
+      <circle cx="32" cy="32" r="29" fill="#241c33" stroke="#3ddc97" strokeWidth="3" />
+      <path d="M24 26a10 10 0 1 1 20 0c0 6-5 8-6 12s-2 9-8 9c-3 0-5-2-5-4" fill="none" stroke="#3ddc97" strokeWidth="4.5" strokeLinecap="round" />
+      <path d="M29 27a5 5 0 0 1 10 0c0 3-3 4-4 6" fill="none" stroke="#bbf7d0" strokeWidth="3" strokeLinecap="round" />
+      <path d="M50 22c3 3 3 9 0 12M54 18c5 5 5 15 0 20" fill="none" stroke="#ffd23f" strokeWidth="2.6" strokeLinecap="round" />
+      <path d="M14 18c-5 5-5 15 0 20" fill="none" stroke="#ffd23f" strokeWidth="2.6" strokeLinecap="round" opacity=".6" />
+    </svg>
   );
 }
 

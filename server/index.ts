@@ -10,6 +10,7 @@ import { Room } from './room.ts';
 import { StopRoom } from './stop-room.ts';
 import { QuizRoom } from './quiz-room.ts';
 import { DubRoom } from './dub-room.ts';
+import { EarRoom } from './ear-room.ts';
 import { DUB_MAX_AUDIO_BYTES } from '../shared/dub.ts';
 import { difficultyCounts, QUIZ_TOTAL } from './quiz-bank.ts';
 
@@ -22,7 +23,7 @@ const app = express();
 const server = http.createServer(app);
 // Buffer maior para as gravações do Dublagem.
 const io = new Server(server, { cors: { origin: true }, pingInterval: 10_000, pingTimeout: 20_000, maxHttpBufferSize: DUB_MAX_AUDIO_BYTES + 200_000 });
-type AnyRoom = Room | StopRoom | QuizRoom | DubRoom;
+type AnyRoom = Room | StopRoom | QuizRoom | DubRoom | EarRoom;
 const rooms = new Map<string, AnyRoom>();
 
 app.get('/api/health', (_req, res) => {
@@ -97,6 +98,7 @@ io.on('connection', (socket) => {
       payload?.game === 'stop' ? new StopRoom(code, io, removeRoom)
       : payload?.game === 'quiz' ? new QuizRoom(code, io, removeRoom)
       : payload?.game === 'dub' ? new DubRoom(code, io, removeRoom)
+      : payload?.game === 'ear' ? new EarRoom(code, io, removeRoom)
       : new Room(code, io, removeRoom);
     rooms.set(room.code, room);
     const m = room.addMember(name, cleanAvatar(payload?.avatar), socket.id);
@@ -247,6 +249,16 @@ io.on('connection', (socket) => {
   socket.on('dub:rewatch', () => {
     const { room, memberId } = dubRoom();
     room?.rewatch(memberId);
+  });
+
+  // ---------- Ouvidão ----------
+  socket.on('ear:answer', (text: string, ack?: (r: unknown) => void) => {
+    const { room, memberId } = current(socket);
+    ack?.(room instanceof EarRoom ? room.answer(memberId, text) : { ok: false, error: 'Sala não encontrada.' });
+  });
+  socket.on('ear:next', () => {
+    const { room, memberId } = current(socket);
+    if (room instanceof EarRoom) room.next(memberId);
   });
 
   socket.on('disconnect', () => {
