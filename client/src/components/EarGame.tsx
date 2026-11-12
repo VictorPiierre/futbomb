@@ -38,7 +38,7 @@ synth?.addEventListener?.('voiceschanged', loadVoices);
 let unlocked = false;
 if (synth) {
   const unlock = () => {
-    if (unlocked) return;
+    if (unlocked || synth.speaking || synth.pending) return;
     unlocked = true;
     const u = new SpeechSynthesisUtterance(' ');
     u.volume = 0;
@@ -59,7 +59,15 @@ function voiceFor(lang: EarLang) {
 
 function speak(text: string, lang: EarLang, rate: number) {
   if (!synth) return;
-  synth.cancel();
+  // Alguns navegadores (Chrome no Android) repetem a fala quando cancel() e speak() vêm colados.
+  if (synth.speaking || synth.pending) {
+    synth.cancel();
+    window.setTimeout(() => say(text, lang, rate), 120);
+  } else say(text, lang, rate);
+}
+
+function say(text: string, lang: EarLang, rate: number) {
+  if (!synth) return;
   const u = new SpeechSynthesisUtterance(text);
   u.lang = EAR_LANGS[lang].voice;
   const v = voiceFor(lang);
@@ -308,7 +316,7 @@ function EarQuestion({ room, meId }: Props) {
   const listening = toSpeak <= 0 && toSpeak > -EAR_SPEAK_MS;
   const remaining = Math.max(0, (room.endsAt ?? 0) - now);
   const answerTotal = room.settings.answerTime * 1000;
-  const key = `${room.code}-${room.round}`;
+  const key = `${room.code}-${room.round}-${speakAt}`;
   const [missed, setMissed] = useState(false);
   const [text, setText] = useState('');
   const [sent, setSent] = useState<string | null>(() => (mine.round === room.round ? mine.answer : null));
