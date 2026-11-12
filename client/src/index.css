@@ -18,6 +18,7 @@
   --color-ok: #3ddc97;
   --color-danger: #ff4d5e;
   --color-sky: #38bdf8;
+  --color-lava: #ff5533;
 }
 
 html,
@@ -198,4 +199,42 @@ body {
   .chip-on {
     @apply border-fire/70 bg-fire/15 text-fire;
   }
+}
+
+/* Torre de Lava */
+.lava-surface {
+  background:
+    radial-gradient(circle at 20% 30%, rgb(255 210 63 / 0.55) 0 3px, transparent 4px) 0 0 / 46px 30px,
+    radial-gradient(circle at 70% 60%, rgb(255 122 26 / 0.6) 0 4px, transparent 5px) 0 0 / 60px 38px,
+    linear-gradient(to top, #b3200e, #ff5533 70%, #ff8a3d);
+  box-shadow: 0 -8px 30px rgb(255 85 51 / 0.55);
+  animation: lava-flow 6s linear infinite;
+}
+.lava-surface::before {
+  content: '';
+  position: absolute;
+  inset: -9px 0 auto 0;
+  height: 12px;
+  background: radial-gradient(12px 9px at 12px 12px, #ff8a3d 98%, transparent) 0 0 / 24px 12px repeat-x;
+  animation: lava-wave 1.6s linear infinite;
+}
+@keyframes lava-flow {
+  to { background-position: 46px -30px, -60px -38px, 0 0; }
+}
+@keyframes lava-wave {
+  to { background-position: 24px 0; }
+}
+.float-up {
+  animation: float-up 1.6s ease-out forwards;
+}
+@keyframes float-up {
+  0% { opacity: 0; transform: translateY(10px); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-30px); }
+}
+.sink {
+  animation: sink 1.2s ease-in 1.3s both;
+}
+@keyframes sink {
+  to { transform: translateY(30px); opacity: 0.4; }
 }

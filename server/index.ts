@@ -10,6 +10,7 @@ import { Room } from './room.ts';
 import { StopRoom } from './stop-room.ts';
 import { QuizRoom } from './quiz-room.ts';
 import { EarRoom } from './ear-room.ts';
+import { LavaRoom } from './lava-room.ts';
 import { difficultyCounts, QUIZ_TOTAL } from './quiz-bank.ts';
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -20,7 +21,7 @@ const ROOM_TTL_MS = 30 * 60_000;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: true }, pingInterval: 10_000, pingTimeout: 20_000 });
-type AnyRoom = Room | StopRoom | QuizRoom | EarRoom;
+type AnyRoom = Room | StopRoom | QuizRoom | EarRoom | LavaRoom;
 const rooms = new Map<string, AnyRoom>();
 
 app.get('/api/health', (_req, res) => {
@@ -95,6 +96,7 @@ io.on('connection', (socket) => {
       payload?.game === 'stop' ? new StopRoom(code, io, removeRoom)
       : payload?.game === 'quiz' ? new QuizRoom(code, io, removeRoom)
       : payload?.game === 'ear' ? new EarRoom(code, io, removeRoom)
+      : payload?.game === 'lava' ? new LavaRoom(code, io, removeRoom)
       : new Room(code, io, removeRoom);
     rooms.set(room.code, room);
     const m = room.addMember(name, cleanAvatar(payload?.avatar), socket.id);
@@ -225,6 +227,12 @@ io.on('connection', (socket) => {
   socket.on('ear:next', () => {
     const { room, memberId } = current(socket);
     if (room instanceof EarRoom) room.next(memberId);
+  });
+
+  // ---------- Torre de Lava ----------
+  socket.on('lava:answer', (text: string, ack?: (r: unknown) => void) => {
+    const { room, memberId } = current(socket);
+    ack?.(room instanceof LavaRoom ? room.answer(memberId, text) : { ok: false, error: 'Sala não encontrada.' });
   });
 
   socket.on('disconnect', () => {

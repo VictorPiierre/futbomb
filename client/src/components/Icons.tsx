@@ -31,7 +31,7 @@ export const IconLink = (p: P) => (
   <svg {...base} {...p}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg>
 );
 
-export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game?: 'pavio' | 'stop' | 'quiz' | 'ear' | 'hub' }) {
+export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game?: 'pavio' | 'stop' | 'quiz' | 'ear' | 'lava' | 'hub' }) {
   const big = size === 'lg';
   const mark = big ? 'h-16 w-16 sm:h-20 sm:w-20' : 'h-9 w-9';
   if (game === 'hub') {
@@ -39,6 +39,14 @@ export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game
       <span className={`font-display leading-none ${big ? 'title-stroke text-5xl sm:text-6xl' : 'text-xl'}`}>
         Joga<span className="text-fire">tina</span>
       </span>
+    );
+  }
+  if (game === 'lava') {
+    return (
+      <div className={`flex items-center ${big ? 'gap-3' : 'gap-2'}`}>
+        <LavaMark className={mark} />
+        <span className={`font-display leading-none text-lava ${big ? 'text-5xl sm:text-7xl' : 'text-xl'}`}>Torre de Lava</span>
+      </div>
     );
   }
   if (game === 'ear') {
@@ -73,6 +81,22 @@ export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game
         <span className="text-fire">Curto</span>
       </span>
     </div>
+  );
+}
+
+/** Marca da Torre de Lava: torre de blocos sobre a lava. */
+export function LavaMark({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} aria-hidden>
+      <rect x="22" y="8" width="20" height="10" rx="2" fill="#a596b8" stroke="#120d1b" strokeWidth="2" />
+      <rect x="22" y="18" width="20" height="10" rx="2" fill="#c4b5d6" stroke="#120d1b" strokeWidth="2" />
+      <rect x="22" y="28" width="20" height="10" rx="2" fill="#a596b8" stroke="#120d1b" strokeWidth="2" />
+      <rect x="22" y="38" width="20" height="10" rx="2" fill="#c4b5d6" stroke="#120d1b" strokeWidth="2" />
+      <path d="M2 46c5-4 9 4 15 0s10-4 15 0 10 4 15 0 10-4 15 0v18H2Z" fill="#ff5533" />
+      <path d="M2 52c5-3 9 3 15 0s10-3 15 0 10 3 15 0 10-3 15 0" fill="none" stroke="#ffd23f" strokeWidth="2.5" strokeLinecap="round" />
+      <circle cx="12" cy="40" r="2" fill="#ff7a1a" />
+      <circle cx="51" cy="37" r="2.5" fill="#ff7a1a" />
+    </svg>
   );
 }
 
