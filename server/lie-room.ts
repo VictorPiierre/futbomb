@@ -36,12 +36,6 @@ interface Option {
   authors: string[];
 }
 
-/** Tipo da resposta, para a "mentira da casa" combinar com a pergunta. */
-function kindOf(answer: string) {
-  if (/d/.test(answer) || /^(um|uma|dois|duas|três|tres|quatro|cinco|seis|sete|oito|nove|dez)/i.test(answer)) return 'num';
-  if (/^[A-ZÁÉÍÓÚÂÊÔÃÕ]/.test(answer)) return 'name';
-  return 'word';
-}
 
 function shuffle<T>(list: T[]) {
   const a = [...list];
@@ -56,7 +50,7 @@ export class LieRoom {
   readonly kind = 'lie';
   readonly code: string;
   hostId = '';
-  settings: LieSettings = { rounds: 8, writeTime: 45, maxPlayers: 10 };
+  settings: LieSettings = { rounds: 8, writeTime: 60, maxPlayers: 10 };
   phase: LiePhase = 'lobby';
   members: Member[] = [];
   lastActivity = Date.now();
@@ -268,7 +262,7 @@ export class LieRoom {
     if (this.phase !== 'write') return { ok: false, error: 'Agora não é hora de escrever.' };
     const text = String(raw ?? '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, LIE_MAX_LEN);
     if (!lieNorm(text)) return { ok: false, error: 'Escreva uma resposta.' };
-    if (tooClose(text, this.current!.truths)) return { ok: false, truth: true, error: 'Essa é a resposta certa! 🤫 Invente uma mentira.' };
+    if (tooClose(text, [this.current!.answer])) return { ok: false, truth: true, error: 'Essa é a resposta certa! 🤫 Invente uma mentira.' };
     const first = m.lie === null;
     m.lie = text;
     if (first) this.broadcast();
@@ -288,14 +282,12 @@ export class LieRoom {
       else groups.set(key, { id: randomBytes(4).toString('hex'), text: p.lie, truth: false, authors: [p.id] });
     }
     const options: Option[] = [{ id: randomBytes(4).toString('hex'), text: q.answer, truth: true, authors: [] }, ...groups.values()];
-    // Poucas mentiras? Completa com respostas de outras perguntas ("mentira da casa").
-    const kind = kindOf(q.answer);
-    const others = shuffle(LIE_BANK.filter((x) => x.id !== q.id)).sort((x, y) => Number(kindOf(y.answer) === kind) - Number(kindOf(x.answer) === kind));
-    for (const o of others) {
+    // Poucas mentiras? Completa com as mentiras prontas desta mesma pergunta ("mentira da casa").
+    for (const fake of shuffle(q.fakes)) {
       if (options.length >= MIN_OPTIONS) break;
-      const key = lieNorm(o.answer);
-      if (options.some((x) => lieNorm(x.text) === key) || tooClose(o.answer, q.truths)) continue;
-      options.push({ id: randomBytes(4).toString('hex'), text: o.answer, truth: false, authors: [] });
+      const key = lieNorm(fake);
+      if (options.some((x) => lieNorm(x.text) === key)) continue;
+      options.push({ id: randomBytes(4).toString('hex'), text: fake, truth: false, authors: [] });
     }
     this.options = shuffle(options);
   }

@@ -2,21 +2,21 @@ import { normalize } from './normalize.ts';
 import type { PublicSpectator } from './types.ts';
 
 /**
- * Mentirômetro: aparece uma curiosidade com uma lacuna. Cada um inventa uma resposta falsa
+ * Mentirômetro: aparece uma pergunta de curiosidade. Cada um inventa uma resposta falsa
  * que pareça verdadeira; depois todas aparecem misturadas com a certa e cada um tenta achar a verdade.
  */
 export const LIE_ROUNDS = [5, 8, 10] as const;
-export const LIE_WRITE_TIMES = [30, 45, 60] as const;
+export const LIE_WRITE_TIMES = [45, 60, 90] as const;
 export const LIE_MAX_PLAYERS = [4, 6, 8, 10] as const;
-export const LIE_PICK_MS = 25_000;
+export const LIE_PICK_MS = 35_000;
 /** Revelação: um tempinho por alternativa + o placar. */
-export const LIE_REVEAL_STEP_MS = 2_200;
+export const LIE_REVEAL_STEP_MS = 2_800;
 export const LIE_REVEAL_TAIL_MS = 5_000;
 /** Achou a verdade. */
 export const LIE_TRUTH_POINTS = 2;
 /** Por pessoa que caiu na sua mentira. */
 export const LIE_FOOL_POINTS = 1;
-export const LIE_MAX_LEN = 40;
+export const LIE_MAX_LEN = 90;
 
 export interface LieSettings {
   rounds: (typeof LIE_ROUNDS)[number];
@@ -76,6 +76,11 @@ export function lieNorm(text: string) {
   return normalize(text).replace(/\b(o|a|os|as|um|uma|de|do|da)\b/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+/** Palavras que importam (sem artigos, preposições e palavras curtas). */
+function keyWords(text: string) {
+  return new Set(lieNorm(text).split(' ').filter((w) => w.length >= 4 || /\d/.test(w)));
+}
+
 /** Mentira "igual" à verdade (ou quase igual) não vale. */
 export function tooClose(lie: string, truths: string[]) {
   const l = lieNorm(lie).replace(/\s/g, '');
@@ -83,7 +88,16 @@ export function tooClose(lie: string, truths: string[]) {
     const n = lieNorm(t).replace(/\s/g, '');
     if (!n || !l) return false;
     if (l === n) return true;
-    // Uma letra de diferença em respostas de 5+ letras também conta como a certa.
+    // Resposta longa: se a mentira repete quase todas as palavras importantes da verdade, é a verdade.
+    const tw = keyWords(t);
+    if (tw.size >= 3) {
+      const lw = keyWords(lie);
+      let hit = 0;
+      for (const w of tw) if (lw.has(w)) hit++;
+      if (hit / tw.size >= 0.75) return true;
+    }
+    // Uma letra de diferença em respostas de 5+ letras também conta como a certa (números precisam ser exatos).
+    if (/\d/.test(l + n)) return false;
     if (Math.abs(l.length - n.length) > 1 || n.length < 5) return false;
     let i = 0;
     let j = 0;

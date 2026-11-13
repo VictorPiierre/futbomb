@@ -22,9 +22,17 @@ async function waitFor(fn: () => boolean, ms = 20_000) {
   }
 }
 
-// Banco: toda pergunta tem lacuna e a própria resposta é reconhecida como verdade.
-check(LIE_BANK.length >= 70, `banco com ${LIE_BANK.length} curiosidades`);
-check(LIE_BANK.every((q) => q.q.includes('____')), 'todas as perguntas têm lacuna');
+// Banco: toda pergunta tem 3 mentiras prontas, nenhuma parecida demais com a verdade.
+check(LIE_BANK.length >= 100, `banco com ${LIE_BANK.length} perguntas`);
+check(LIE_BANK.every((q) => q.fakes.length === 3 && q.q.endsWith('?')), 'toda pergunta tem 3 mentiras prontas');
+check(new Set(LIE_BANK.map((q) => q.q)).size === LIE_BANK.length, 'sem perguntas repetidas');
+const bad = LIE_BANK.filter((q) => q.fakes.some((f) => tooClose(f, [q.answer])));
+check(!bad.length, `nenhuma mentira pronta parecida demais com a verdade ${bad.map((q) => q.q).join(' / ')}`);
+check(
+  tooClose('para resfriar o cérebro, segundo a teoria mais aceita', ['Segundo a teoria mais aceita, para ajudar a resfriar o cérebro']),
+  'frase com as mesmas palavras da verdade é barrada',
+);
+check(!tooClose('Para mandar mais oxigênio para o cérebro', ['Segundo a teoria mais aceita, para ajudar a resfriar o cérebro']), 'frase diferente passa');
 check(tooClose('Cabeca', ['cabeça']) && tooClose('a cabeça', ['cabeça']) && tooClose('cabesa', ['cabeça']), 'mentira igual à verdade (com artigo/acento/1 letra) é barrada');
 check(!tooClose('barriga', ['cabeça']) && !tooClose('4', ['3']), 'mentira diferente passa');
 
@@ -70,7 +78,7 @@ for (let round = 1; round <= 5; round++) {
   await waitFor(() => a.mine?.round === round && !!a.mine.own && !!b.mine?.own && !!c.mine?.own, 3000);
   const opts = a.state!.options!;
   const truthOpt = opts.find((o) => o.text === q.answer)!;
-  check(opts.length === 4 && !!truthOpt, `4 alternativas com a verdade: ${opts.map((o) => o.text).join(' | ')}`);
+  check(opts.length === 4 && !!truthOpt && opts.filter((o) => q.fakes.includes(o.text)).length === 1, `4 alternativas com a verdade: ${opts.map((o) => o.text).join(' | ')}`);
   check(a.mine!.own === c.mine!.own, 'mentiras iguais viraram uma alternativa só (Ana e Caio)');
   if (round === 1) {
     const ownPick = await a.emit<{ ok: boolean }>('lie:pick', a.mine!.own);

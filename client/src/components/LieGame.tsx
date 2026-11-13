@@ -125,8 +125,8 @@ function Write({ room, meId }: Props) {
               maxLength={LIE_MAX_LEN}
               autoComplete="off"
               onChange={(e) => setText(e.target.value)}
-              placeholder="Sua mentira"
-              className="min-w-0 flex-1 rounded-2xl border-2 border-grape/50 bg-panel-2 px-4 py-3.5 font-display text-2xl outline-none placeholder:font-sans placeholder:text-base placeholder:text-muted focus:border-grape focus:ring-4 focus:ring-grape/15"
+              placeholder="Escreva uma resposta falsa e convincente"
+              className="min-w-0 flex-1 rounded-2xl border-2 border-grape/50 bg-panel-2 px-4 py-3.5 text-lg font-semibold outline-none placeholder:font-sans placeholder:text-base placeholder:text-muted focus:border-grape focus:ring-4 focus:ring-grape/15"
             />
             <button disabled={!text.trim()} className="btn-primary flex items-center gap-2 rounded-2xl px-5">
               <IconSend width={18} /> <span className="hidden sm:inline">{sent === null ? 'Enviar' : 'Trocar'}</span>
@@ -135,7 +135,7 @@ function Write({ room, meId }: Props) {
           {error && <p className="slide-in mt-2 text-sm text-danger">{error}</p>}
           {sent !== null && (
             <div className="pop-in mt-3 rounded-2xl border border-grape/40 bg-grape/10 px-4 py-3 text-center">
-              Sua mentira: <b className="font-display text-2xl text-grape">{sent}</b>
+              Sua mentira: <b className="text-lg text-grape">{sent}</b>
               <p className="text-xs text-muted">Dá para trocar até o tempo acabar.</p>
             </div>
           )}
@@ -188,7 +188,7 @@ function Pick({ room, meId }: Props) {
               key={o.id}
               disabled={!playing || isOwn}
               onClick={() => choose(o.id)}
-              className={`pop-in cursor-pointer rounded-2xl border-2 px-4 py-4 text-left font-display text-xl transition disabled:cursor-not-allowed ${
+              className={`pop-in cursor-pointer rounded-2xl border-2 px-4 py-3.5 text-left text-base leading-snug font-semibold transition disabled:cursor-not-allowed ${
                 on ? 'border-ok bg-ok/15' : isOwn ? 'border-dashed border-line bg-panel-2/50 opacity-60' : 'border-line bg-panel-2 hover:border-grape/60'
               }`}
               style={{ animationDelay: `${i * 70}ms` }}
@@ -241,7 +241,7 @@ function Reveal({ room, meId, isHost }: Props) {
             className={`pop-in rounded-2xl border-2 p-3.5 ${r.truth ? 'border-ok bg-ok/15' : 'border-grape/40 bg-grape/10'}`}
           >
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <span className="font-display text-2xl">{r.text}</span>
+              <span className="w-full min-w-0 text-lg leading-snug font-semibold sm:w-auto sm:flex-1">{r.text}</span>
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${r.truth ? 'bg-ok text-ink' : 'bg-grape text-ink'}`}>
                 {r.truth ? '✅ VERDADE' : r.authors.length ? `🤥 MENTIRA de ${r.authors.map((a) => player(a)?.name ?? '?').join(' e ')}` : '🏠 mentira da casa'}
               </span>
@@ -400,7 +400,7 @@ function LieLobby({ room, meId, isHost, onCopy }: Props) {
 
         <div className="mt-6 rounded-2xl bg-panel/60 p-4 text-sm text-muted">
           <p className="mb-1 font-semibold text-white">Como funciona</p>
-          Aparece uma curiosidade verdadeira com uma lacuna — tipo “O polvo tem ____ corações”. Cada um inventa uma resposta <b className="text-grape">falsa</b> que
+          Aparece uma pergunta de curiosidade — tipo “Por que bocejamos?”. Cada um inventa uma resposta <b className="text-grape">falsa</b> que
           pareça verdadeira. Depois todas aparecem misturadas com a resposta certa e cada um tenta achar a <b className="text-ok">verdade</b>.
           Achou: <b className="text-white">+{LIE_TRUTH_POINTS}</b>. Cada pessoa que cair na sua mentira: <b className="text-white">+{LIE_FOOL_POINTS}</b>. Melhor com 3 ou mais jogadores!
         </div>
