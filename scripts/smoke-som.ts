@@ -37,13 +37,11 @@ class Client {
   socket: Socket;
   state: SomPublicRoom | null = null;
   clips: { round: number; clips: SomClip[] } | null = null;
-  custom = new Map<string, ArrayBuffer>();
   id = '';
   constructor() {
     this.socket = io(URL, { transports: ['websocket'] });
     this.socket.on('room:state', (s) => (this.state = s));
     this.socket.on('som:clips', (p) => (this.clips = p));
-    this.socket.on('som:custom', (p: { sounds: { id: string; data: ArrayBuffer }[] }) => p.sounds.forEach((x) => this.custom.set(x.id, x.data)));
   }
   emit<T>(ev: string, ...args: unknown[]) {
     return new Promise<T>((r) => this.socket.emit(ev, ...args, r));
@@ -61,42 +59,6 @@ check(a.state?.kind === 'som', 'sala do Faz Esse Som! criada com 3 jogadores');
 a.socket.emit('room:settings', { theme: 'xyz', difficulty: 'mole' });
 await sleep(200);
 check(a.state!.settings.theme === 'mix' && a.state!.settings.difficulty === 'sortear', 'padrão: todos os temas misturados e dificuldade sorteada; valores inválidos ignorados');
-// Sons da sala: só WAV gerado pelo site, chega para todos, tema "só sons da sala".
-const wav = (n: number) => {
-  const b = Buffer.alloc(44 + n * 2);
-  b.write('RIFF', 0, 'ascii');
-  b.writeUInt32LE(36 + n * 2, 4);
-  b.write('WAVEfmt ', 8, 'ascii');
-  b.writeUInt32LE(16, 16);
-  b.writeUInt16LE(1, 20);
-  b.writeUInt16LE(1, 22);
-  b.writeUInt32LE(44100, 24);
-  b.writeUInt32LE(88200, 28);
-  b.writeUInt16LE(2, 32);
-  b.writeUInt16LE(16, 34);
-  b.write('data', 36, 'ascii');
-  b.writeUInt32LE(n * 2, 40);
-  for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(Math.sin(i / 10) * 8000), 44 + i * 2);
-  return b;
-};
-const bad = await b.emit<{ ok: boolean }>('som:add-sound', { title: 'x', emoji: '🔊', cat: 'meme', diff: 'facil' }, Buffer.alloc(5000, 1));
-check(!bad.ok, 'áudio que não é o WAV do site é recusado');
-const noName = await b.emit<{ ok: boolean }>('som:add-sound', { title: '  ', emoji: '🔊', cat: 'meme', diff: 'facil' }, wav(20000));
-check(!noName.ok, 'som sem nome é recusado');
-const added = await b.emit<{ ok: boolean }>('som:add-sound', { title: 'Grito do Beto', emoji: '😱', cat: 'meme', diff: 'impossivel' }, wav(30000));
-await waitFor(() => a.state?.customSounds.length === 1 && c.custom.size === 1);
-const cs = a.state!.customSounds[0];
-check(added.ok && cs.title === 'Grito do Beto' && cs.byName === 'Beto' && cs.id.startsWith('sala-'), 'Beto enviou um som para a sala');
-check(c.custom.get(cs.id)?.byteLength === 44 + 60000, 'o áudio chegou para os outros jogadores');
-a.socket.emit('room:settings', { theme: 'sala' });
-await waitFor(() => a.state?.settings.theme === 'sala');
-check(true, 'tema "só sons da sala" liberado quando há sons enviados');
-c.socket.emit('som:remove-sound', cs.id);
-await sleep(200);
-check(a.state!.customSounds.length === 1, 'só o autor ou o anfitrião removem um som');
-a.socket.emit('som:remove-sound', cs.id);
-await waitFor(() => a.state?.customSounds.length === 0);
-check(a.state!.settings.theme === 'mix', 'sem sons da sala, o tema volta para o misturado');
 a.socket.emit('room:settings', { rounds: 3, theme: 'meme', difficulty: 'impossivel' });
 await waitFor(() => a.state?.settings.rounds === 3 && a.state.settings.theme === 'meme');
 
@@ -145,17 +107,6 @@ for (let round = 1; round <= 3; round++) {
 await waitFor(() => a.state?.phase === 'ended');
 check(seen.size === 3, 'sons diferentes em cada rodada');
 check(a.state!.winnerId === a.id && a.state!.ranking![0].score === 10, `Ana campeã com ${a.state!.ranking![0].score} pontos`);
-
-// Nova partida só com os sons da sala.
-await a.emit('game:restart', false);
-await waitFor(() => a.state?.phase === 'lobby');
-await b.emit('som:add-sound', { title: 'Pum do Beto', emoji: '💨', cat: 'meme', diff: 'facil' }, wav(20000));
-await waitFor(() => a.state?.customSounds.length === 1);
-a.socket.emit('room:settings', { theme: 'sala' });
-await waitFor(() => a.state?.settings.theme === 'sala');
-await a.emit('game:start');
-await waitFor(() => a.state?.phase === 'record' && a.state.round === 1);
-check(a.state!.sound!.custom === true && a.state!.sound!.title === 'Pum do Beto', 'partida com o tema "sala" toca o som enviado');
 
 for (const cl of [a, b, c]) cl.socket.close();
 console.log(failures ? `\n${failures} falha(s)` : '\nTudo certo!');

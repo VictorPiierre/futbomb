@@ -24,22 +24,8 @@ export const SOM_WIN_POINTS = 3;
 /** Tamanho máximo de uma gravação enviada (bytes). */
 export const SOM_MAX_CLIP_BYTES = 400_000;
 
-/** Tema da partida: uma categoria, todas misturadas ou só os sons enviados na sala. */
-export type SomTheme = SomCategory | 'mix' | 'sala';
-
-/** Sons que os jogadores enviam pela própria sala (ficam na memória enquanto a sala existir). */
-export const SOM_CUSTOM_MAX = 30;
-export const SOM_CUSTOM_MAX_BYTES = 400_000;
-export const SOM_CUSTOM_TITLE_MAX = 40;
-export interface SomCustomSound {
-  id: string;
-  title: string;
-  emoji: string;
-  cat: SomCategory;
-  diff: SomDifficulty;
-  byId: string;
-  byName: string;
-}
+/** Tema da partida: uma categoria ou todas misturadas. */
+export type SomTheme = SomCategory | 'mix';
 /** Dificuldade da partida: fixa ou sorteada a cada rodada. */
 export type SomDifficultySetting = SomDifficulty | 'sortear';
 /** Peso do sorteio de dificuldade (a graça está no difícil e no impossível). */
@@ -72,8 +58,8 @@ export interface SomSound {
   emoji: string;
   cat: SomCategory;
   diff: SomDifficulty;
-  /** Enviado por alguém da sala (o áudio chega pelo evento som:custom). */
-  custom?: boolean;
+  /** Arquivo em client/public/som (padrão: <id>.mp3). */
+  file?: string;
 }
 
 /** Resultado da rodada para cada imitação. */
@@ -101,8 +87,6 @@ export interface SomPublicRoom {
   endsAt: number | null;
   /** Votação: quantas imitações existem (as gravações chegam pelo evento som:clips). */
   clipCount: number;
-  /** Sons enviados pelos jogadores nesta sala. */
-  customSounds: SomCustomSound[];
   /** Quando começa a sequência original + imitações na votação. */
   playlistAt: number | null;
   results: SomResult[] | null;

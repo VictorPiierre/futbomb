@@ -7,11 +7,15 @@
  * de uma voz neural offline e muito distorcidos — veja scripts/gen-som.ts). Os "memes" e o "phonk"
  * são criações originais no MESMO ESTILO das referências, não os áudios originais (que têm dono).
  *
- * Para adicionar um som novo (de um arquivo que você tenha direito de usar):
+ * O dono do site também pode salvar sons pela página /admin (ficam em data/som-extra.json + client/public/som).
+ *
+ * Para adicionar um som novo pelo terminal (de um arquivo que você tenha direito de usar):
  *   npm run som:add -- caminho/do/arquivo.mp3 id-do-som "Título" 🐸 categoria dificuldade [início] [duração]
  * Ex.: npm run som:add -- grito.mp3 grito-do-joao "Grito do João" 😱 meme impossivel 0.4 1.2
  * O comando corta (máx. 2s), controla o volume, salva em client/public/som/ e acrescenta a linha aqui.
  */
+import extra from '../data/som-extra.json';
+
 export type SomCategory = 'meme' | 'phonk' | 'musica' | 'bicho' | 'anime' | 'jogo' | 'efeito';
 export type SomDifficulty = 'facil' | 'dificil' | 'impossivel';
 
@@ -21,6 +25,8 @@ export interface SomEntry {
   emoji: string;
   cat: SomCategory;
   diff: SomDifficulty;
+  /** Arquivo em client/public/som (padrão: <id>.mp3). */
+  file?: string;
 }
 
 export const SOM_CATEGORIES: Record<SomCategory, { label: string; emoji: string }> = {
@@ -44,7 +50,7 @@ export const SOM_KARAOKE_CATS: SomCategory[] = ['musica', 'phonk'];
 /** Categorias em que o "microfone estourado" fica disponível. */
 export const SOM_BLOWN_CATS: SomCategory[] = ['meme'];
 
-export const SOM_LIBRARY: SomEntry[] = [
+const BASE: SomEntry[] = [
   // ---- memes / shitpost: gritos e vozes absurdas ----
   { id: 'faaah', title: 'FAAAHHH agudo', emoji: '😩', cat: 'meme', diff: 'dificil' },
   { id: 'auugh', title: 'AUUGHHH bizarro', emoji: '😫', cat: 'meme', diff: 'dificil' },
@@ -140,3 +146,9 @@ export const SOM_LIBRARY: SomEntry[] = [
   { id: 'pum', title: 'Pum', emoji: '💨', cat: 'efeito', diff: 'facil' },
   // ↑ novos sons entram aqui (npm run som:add)
 ];
+
+/** Sons salvos pelo dono do site na página /admin. */
+export const SOM_EXTRA: SomEntry[] = extra as SomEntry[];
+
+/** Biblioteca completa (o servidor acrescenta aqui, na hora, o que for salvo pelo /admin). */
+export const SOM_LIBRARY: SomEntry[] = [...BASE, ...SOM_EXTRA];

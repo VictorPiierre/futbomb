@@ -13,7 +13,6 @@ import { audioCtx, sfx } from '../sound';
 import { BEST_IMITATION, pick } from '../zoeira';
 import Avatar from './Avatar';
 import { IconCopy, IconCrown, IconLink, SomMark } from './Icons';
-import SomUpload from './SomUpload';
 
 interface Props {
   room: SomPublicRoom;
@@ -175,7 +174,7 @@ function SoundCard({ room, disabled }: { room: SomPublicRoom; disabled?: boolean
       </div>
       <button
         disabled={disabled}
-        onClick={async () => playAudio('original', await loadSound(sound.id))}
+        onClick={async () => playAudio('original', await loadSound(sound.id, sound.file))}
         className="btn-secondary shrink-0 px-4 text-sm disabled:opacity-40"
       >
         🔁 <span className="hidden sm:inline">Ouvir de novo</span>
@@ -195,11 +194,11 @@ function Record({ room, meId }: Props) {
 
   // Toca o original para todos ao mesmo tempo, uma vez por rodada.
   useEffect(() => {
-    void loadSound(sound.id);
+    void loadSound(sound.id, sound.file);
     const key = `${room.code}-${room.round}-${room.playAt}`;
     if (!room.playAt || autoPlayed.has(key) || serverNow() > room.playAt + 1500) return;
     autoPlayed.add(key);
-    void loadSound(sound.id).then((buf) => playAudio('original', buf, room.playAt!));
+    void loadSound(sound.id, sound.file).then((buf) => playAudio('original', buf, room.playAt!));
   }, [room.code, room.round, room.playAt, sound.id]);
 
   const [rec, setRec] = useState<Recording | null>(null);
@@ -336,7 +335,7 @@ function Vote({ room, meId }: Props) {
     if (!clips || !room.playlistAt) return;
     const timers: number[] = [];
     const items: { key: string; src: () => Promise<AudioBuffer | ClipAudio | null> }[] = [
-      { key: 'original', src: () => loadSound(sound.id) },
+      { key: 'original', src: () => loadSound(sound.id, sound.file) },
       ...clips.map((c) => ({ key: `clip-${c.slot}`, src: async () => c.audio })),
     ];
     items.forEach((it, i) => {
@@ -366,7 +365,7 @@ function Vote({ room, meId }: Props) {
       <Timer endsAt={room.endsAt} total={room.endsAt ? room.endsAt - playlistAt : 1} />
 
       <button
-        onClick={async () => playAudio('original', await loadSound(sound.id))}
+        onClick={async () => playAudio('original', await loadSound(sound.id, sound.file))}
         className={`mt-3 flex w-full cursor-pointer items-center gap-3 rounded-2xl border-2 p-3 text-left transition ${nowPlaying === 'original' ? 'border-sky bg-sky/15' : 'border-line bg-panel-2 hover:border-sky/50'}`}
       >
         <span className={`text-3xl ${nowPlaying === 'original' ? 'wiggle' : ''}`}>{sound.emoji}</span>
@@ -454,7 +453,7 @@ function Results({ room, meId, isHost }: Props) {
           <p className="text-xs font-semibold tracking-wider text-muted uppercase">Resultado</p>
           <p className="font-display text-2xl leading-tight">{sound.title}</p>
         </div>
-        <button onClick={async () => playAudio('original', await loadSound(sound.id))} className="btn-secondary px-3 text-sm">
+        <button onClick={async () => playAudio('original', await loadSound(sound.id, sound.file))} className="btn-secondary px-3 text-sm">
           {nowPlaying === 'original' ? <Eq on className="text-sky" /> : '▶ Original'}
         </button>
       </div>
@@ -654,7 +653,6 @@ function SomLobby({ room, meId, isHost, onCopy }: Props) {
         )}
 
         <MicTest />
-        <SomUpload room={room} meId={meId} isHost={isHost} />
 
         <div className="mt-6 rounded-2xl border border-pop/30 bg-pop/10 p-4">
           <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-pop-soft">
@@ -715,11 +713,6 @@ export function SomSettingsPanel({ room, editable }: { room: SomPublicRoom; edit
           <button disabled={!editable} onClick={() => set({ theme: 'mix' })} className={`${chip(s.theme === 'mix')} col-span-2`}>
             🌀 Todos os temas misturados
           </button>
-          {room.customSounds.length > 0 && (
-            <button disabled={!editable} onClick={() => set({ theme: 'sala' })} className={`${chip(s.theme === 'sala')} col-span-2`}>
-              📁 Só os sons da sala <span className="text-muted">({room.customSounds.length})</span>
-            </button>
-          )}
           {THEMES.map(([cat, count]) => (
             <button key={cat} disabled={!editable} onClick={() => set({ theme: cat })} className={`${chip(s.theme === cat)} text-sm`}>
               {SOM_CATEGORIES[cat].emoji} {SOM_CATEGORIES[cat].label} <span className="text-muted">({count})</span>

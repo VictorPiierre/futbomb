@@ -2,39 +2,22 @@
  * Áudio do "Faz Esse Som!": tocar o som original e as imitações, e gravar pelo microfone.
  */
 import { useEffect, useState } from 'react';
-import { serverNow, socket } from './net';
+import { serverNow } from './net';
 import { audioCtx } from './sound';
 
 // ---------- tocar ----------
 
 const soundBuffers = new Map<string, Promise<AudioBuffer | null>>();
 
-// Sons enviados pelos jogadores da sala: o servidor manda o áudio pelo evento som:custom.
-const customData = new Map<string, ArrayBuffer>();
-const customWaiters = new Map<string, ((d: ArrayBuffer) => void)[]>();
-socket.on('som:custom', (p: { sounds: { id: string; data: ArrayBuffer }[] }) => {
-  for (const snd of p.sounds) {
-    customData.set(snd.id, snd.data);
-    for (const w of customWaiters.get(snd.id) ?? []) w(snd.data);
-    customWaiters.delete(snd.id);
-  }
-});
-function customAudio(id: string) {
-  const d = customData.get(id);
-  if (d) return Promise.resolve(d);
-  return new Promise<ArrayBuffer>((resolve, reject) => {
-    customWaiters.set(id, [...(customWaiters.get(id) ?? []), resolve]);
-    setTimeout(() => reject(new Error('timeout')), 15_000);
-  });
-}
+/** Repositório do jogo: os sons salvos pela página /admin já ficam lá antes do site terminar de atualizar. */
+const RAW = 'https://raw.githubusercontent.com/VictorPiierre/futbomb/main/client/public/som/';
+const get = (url: string) => fetch(url).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))));
 
-/** Baixa e decodifica um som da biblioteca (client/public/som) ou enviado na sala. */
-export function loadSound(id: string) {
+/** Baixa e decodifica um som da biblioteca (client/public/som/<arquivo>). */
+export function loadSound(id: string, file = `${id}.mp3`) {
   let b = soundBuffers.get(id);
   if (!b) {
-    const data = id.startsWith('sala-')
-      ? customAudio(id).then((d) => d.slice(0))
-      : fetch(`/som/${id}.mp3`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))));
+    const data = get(`/som/${file}`).catch(() => get(RAW + file));
     b = data
       .then((data) => audioCtx()!.decodeAudioData(data))
       .catch(() => {

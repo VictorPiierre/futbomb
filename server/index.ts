@@ -13,6 +13,7 @@ import { EarRoom } from './ear-room.ts';
 import { LavaRoom } from './lava-room.ts';
 import { LieRoom } from './lie-room.ts';
 import { SomRoom } from './som-room.ts';
+import { addSound, adminConfigured, checkKey, listSounds, removeSound } from './som-admin.ts';
 import { REACTION_COOLDOWN_MS, REACTIONS, type Reaction } from '../shared/reactions.ts';
 import { difficultyCounts, QUIZ_TOTAL } from './quiz-bank.ts';
 
@@ -89,6 +90,9 @@ function attach(socket: Socket, room: AnyRoom, memberId: string) {
   socket.data = { code: room.code, memberId } satisfies SocketData;
   socket.join(room.code);
 }
+
+/** Senhas erradas no /admin por endereço IP. */
+const adminTries = new Map<string, { fails: number; lockedUntil: number }>();
 
 io.on('connection', (socket) => {
   socket.on('room:create', (payload: { name?: string; avatar?: string; game?: string }, ack?: (r: JoinResult) => void) => {
@@ -263,17 +267,45 @@ io.on('connection', (socket) => {
     const { room, memberId } = current(socket);
     ack?.(room instanceof SomRoom ? room.vote(memberId, slot) : { ok: false, error: 'Sala não encontrada.' });
   });
-  socket.on('som:add-sound', (meta: Record<string, unknown>, data: unknown, ack?: (r: unknown) => void) => {
-    const { room, memberId } = current(socket);
-    ack?.(room instanceof SomRoom ? room.addCustom(memberId, meta ?? {}, data) : { ok: false, error: 'Sala não encontrada.' });
-  });
-  socket.on('som:remove-sound', (id: string) => {
-    const { room, memberId } = current(socket);
-    if (room instanceof SomRoom) room.removeCustom(memberId, id);
-  });
   socket.on('som:next', () => {
     const { room, memberId } = current(socket);
     if (room instanceof SomRoom) room.next(memberId);
+  });
+
+  // ---------- /admin: sons salvos para sempre (só com a senha do dono) ----------
+  const ip = String(socket.handshake.headers['x-forwarded-for'] ?? socket.handshake.address).split(',')[0].trim();
+  const admin = (key: unknown) => {
+    const tries = adminTries.get(ip) ?? { fails: 0, lockedUntil: 0 };
+    if (Date.now() < tries.lockedUntil) return 'Muitas tentativas. Espere 5 minutos.';
+    if (!adminConfigured()) return 'A página de administração ainda não foi configurada no servidor.';
+    if (!checkKey(key)) {
+      // 5 senhas erradas seguidas bloqueiam este endereço por 5 minutos.
+      tries.fails++;
+      if (tries.fails >= 5) {
+        tries.fails = 0;
+        tries.lockedUntil = Date.now() + 5 * 60_000;
+      }
+      adminTries.set(ip, tries);
+      return 'Senha incorreta.';
+    }
+    adminTries.delete(ip);
+    return null;
+  };
+  socket.on('admin:login', (key: string, ack?: (r: unknown) => void) => {
+    const error = admin(key);
+    ack?.(error ? { ok: false, error, configured: adminConfigured() } : { ok: true, sounds: listSounds() });
+  });
+  socket.on('admin:som-add', async (key: string, meta: Record<string, unknown>, data: unknown, ack?: (r: unknown) => void) => {
+    const error = admin(key);
+    if (error) return ack?.({ ok: false, error });
+    const res = await addSound(meta ?? {}, data);
+    ack?.({ ...res, sounds: listSounds() });
+  });
+  socket.on('admin:som-remove', async (key: string, id: string, ack?: (r: unknown) => void) => {
+    const error = admin(key);
+    if (error) return ack?.({ ok: false, error });
+    const res = await removeSound(id);
+    ack?.({ ...res, sounds: listSounds() });
   });
 
   // ---------- reações (todos os jogos, menos o Stop) ----------

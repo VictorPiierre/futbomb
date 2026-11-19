@@ -2,10 +2,10 @@ import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import type { Server } from 'socket.io';
 import {
   SOM_COUNTDOWN_MS, SOM_MAX_CLIP_BYTES, SOM_MAX_PLAYERS, SOM_RECORD_TIMES, SOM_RESULTS_MS, SOM_ROUNDS, SOM_SLOT_MS,
-  SOM_CUSTOM_MAX, SOM_CUSTOM_MAX_BYTES, SOM_CUSTOM_TITLE_MAX, SOM_VOTE_EXTRA_MS, SOM_VOTE_POINTS, SOM_WIN_POINTS,
-  type SomClip, type SomCustomSound, type SomPhase, type SomPublicRoom, type SomResult, type SomSettings, type SomSound,
+  SOM_VOTE_EXTRA_MS, SOM_VOTE_POINTS, SOM_WIN_POINTS,
+  type SomClip, type SomPhase, type SomPublicRoom, type SomResult, type SomSettings, type SomSound,
 } from '../shared/som.ts';
-import { SOM_CATEGORIES, SOM_DIFFICULTIES, SOM_LIBRARY, type SomCategory, type SomDifficulty } from '../shared/som-library.ts';
+import { SOM_DIFFICULTIES, SOM_LIBRARY, type SomDifficulty } from '../shared/som-library.ts';
 import { SOM_DIFF_WEIGHTS } from '../shared/som.ts';
 
 const MAX_MEMBERS = 16;
@@ -63,8 +63,6 @@ export class SomRoom {
   private winnerId: string | null = null;
   private timer?: NodeJS.Timeout;
   private used = new Set<string>();
-  /** Sons enviados pelos jogadores (o áudio fica só na memória do servidor). */
-  private custom: (SomCustomSound & { data: Buffer })[] = [];
 
   constructor(code: string, private io: Server, private onEmpty: (room: SomRoom) => void) {
     this.code = code;
@@ -103,7 +101,6 @@ export class SomRoom {
     this.touch();
     // Entrou no meio da votação/resultado: recebe as gravações para poder ouvir.
     if (this.phase === 'vote' || this.phase === 'results') setTimeout(() => this.sendClips(m), 0);
-    setTimeout(() => this.sendCustom(m.socketId), 0);
     return m;
   }
 
@@ -113,7 +110,6 @@ export class SomRoom {
     m.connected = true;
     this.touch();
     setTimeout(() => this.sendMine(m), 0);
-    setTimeout(() => this.sendCustom(m.socketId), 0);
     if (this.phase === 'vote' || this.phase === 'results') setTimeout(() => this.sendClips(m), 0);
   }
 
@@ -170,7 +166,7 @@ export class SomRoom {
   updateSettings(by: string, patch: Partial<SomSettings>) {
     if (by !== this.hostId || this.phase !== 'lobby') return;
     const s = { ...this.settings };
-    if (patch.theme === 'mix' || (patch.theme === 'sala' && this.custom.length) || (typeof patch.theme === 'string' && SOM_LIBRARY.some((x) => x.cat === patch.theme))) s.theme = patch.theme;
+    if (patch.theme === 'mix' || (typeof patch.theme === 'string' && SOM_LIBRARY.some((x) => x.cat === patch.theme))) s.theme = patch.theme;
     if (patch.difficulty === 'sortear' || (typeof patch.difficulty === 'string' && patch.difficulty in SOM_DIFFICULTIES)) s.difficulty = patch.difficulty;
     if (SOM_ROUNDS.includes(patch.rounds as never)) s.rounds = patch.rounds!;
     if (SOM_RECORD_TIMES.includes(patch.recordTime as never)) s.recordTime = patch.recordTime!;
@@ -234,16 +230,10 @@ export class SomRoom {
    * Se faltar som naquela dificuldade, usa qualquer dificuldade do tema. No "misturado", evita repetir a categoria seguida.
    */
   private pickSound(): SomSound {
-    const theme = this.settings.theme === 'sala' && !this.custom.length ? 'mix' : this.settings.theme;
-    const lib: SomSound[] = [...SOM_LIBRARY, ...this.custom.map((c) => ({ id: c.id, title: c.title, emoji: c.emoji, cat: c.cat, diff: c.diff, custom: true }))];
-    // No "misturado", os sons enviados pelos amigos aparecem com prioridade (metade das vezes, enquanto houver inéditos).
-    const freshCustom = lib.filter((s) => s.custom && !this.used.has(s.id));
-    if (theme === 'mix' && freshCustom.length && randomInt(2) === 0) {
-      const s = freshCustom[randomInt(freshCustom.length)];
-      this.used.add(s.id);
-      return s;
-    }
-    const inTheme = lib.filter((s) => (theme === 'sala' ? s.custom : theme === 'mix' || s.cat === theme));
+    const theme = this.settings.theme;
+    // A biblioteca inclui os sons que o dono do site salvou pela página /admin.
+    const lib = SOM_LIBRARY;
+    const inTheme = lib.filter((s) => theme === 'mix' || s.cat === theme);
     const all = inTheme.length ? inTheme : lib;
     let free = all.filter((s) => !this.used.has(s.id));
     if (!free.length) {
@@ -265,51 +255,7 @@ export class SomRoom {
     }
     const s = pool[randomInt(pool.length)];
     this.used.add(s.id);
-    return { id: s.id, title: s.title, emoji: s.emoji, cat: s.cat, diff: s.diff, ...(s.custom ? { custom: true } : {}) };
-  }
-
-  // ---------- sons enviados pela sala ----------
-
-  addCustom(by: string, meta: { title?: unknown; emoji?: unknown; cat?: unknown; diff?: unknown }, data: unknown): { ok: boolean; error?: string } {
-    const m = this.find(by);
-    if (!m) return { ok: false, error: 'Sala não encontrada.' };
-    if (this.phase !== 'lobby' && this.phase !== 'ended') return { ok: false, error: 'Dá para adicionar sons só na sala de espera.' };
-    if (this.custom.length >= SOM_CUSTOM_MAX) return { ok: false, error: `A sala já tem ${SOM_CUSTOM_MAX} sons enviados.` };
-    const buf = Buffer.isBuffer(data) ? data : data instanceof ArrayBuffer ? Buffer.from(data) : ArrayBuffer.isView(data) ? Buffer.from(data.buffer, data.byteOffset, data.byteLength) : null;
-    if (!buf || buf.length < 500) return { ok: false, error: 'Áudio vazio.' };
-    if (buf.length > SOM_CUSTOM_MAX_BYTES) return { ok: false, error: 'Áudio grande demais.' };
-    // Só aceitamos o WAV que o próprio site gera (cortado e com volume ajustado).
-    if (buf.toString('ascii', 0, 4) !== 'RIFF' || buf.toString('ascii', 8, 12) !== 'WAVE') return { ok: false, error: 'Formato de áudio inválido.' };
-    const title = String(meta?.title ?? '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, SOM_CUSTOM_TITLE_MAX);
-    if (!title) return { ok: false, error: 'Dê um nome para o som.' };
-    const emoji = [...String(meta?.emoji ?? '')].slice(0, 2).join('') || '🔊';
-    const cat = String(meta?.cat) as SomCategory;
-    const diff = String(meta?.diff) as SomDifficulty;
-    if (!(cat in SOM_CATEGORIES)) return { ok: false, error: 'Tema inválido.' };
-    if (!(diff in SOM_DIFFICULTIES)) return { ok: false, error: 'Dificuldade inválida.' };
-    const sound = { id: `sala-${randomBytes(5).toString('hex')}`, title, emoji, cat, diff, byId: m.id, byName: m.name, data: buf };
-    this.custom.push(sound);
-    this.io.to(this.code).emit('som:custom', { sounds: [{ id: sound.id, data: this.arrayOf(buf) }] });
-    this.broadcast();
-    return { ok: true };
-  }
-
-  removeCustom(by: string, id: unknown) {
-    const s = this.custom.find((c) => c.id === id);
-    if (!s || (by !== s.byId && by !== this.hostId)) return;
-    this.custom = this.custom.filter((c) => c !== s);
-    if (this.settings.theme === 'sala' && !this.custom.length) this.settings = { ...this.settings, theme: 'mix' };
-    this.broadcast();
-  }
-
-  private arrayOf(buf: Buffer) {
-    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
-  }
-
-  /** Manda os áudios enviados na sala para quem acabou de entrar/voltar. */
-  private sendCustom(socketId: string | null) {
-    if (!socketId || !this.custom.length) return;
-    this.io.to(socketId).emit('som:custom', { sounds: this.custom.map((c) => ({ id: c.id, data: this.arrayOf(c.data) })) });
+    return { id: s.id, title: s.title, emoji: s.emoji, cat: s.cat, diff: s.diff, ...(s.file ? { file: s.file } : {}) };
   }
 
   private nextRound() {
@@ -510,7 +456,6 @@ export class SomRoom {
       playAt: this.phase === 'record' ? this.playAt : null,
       endsAt: this.endsAt,
       clipCount: this.slots.length,
-      customSounds: this.custom.map(({ data: _data, ...meta }) => meta),
       playlistAt: this.phase === 'vote' ? this.playlistAt : null,
       results: this.phase === 'results' ? this.results : null,
       gained: this.phase === 'results' ? this.gained : null,
