@@ -103,7 +103,7 @@ export interface RankingEntry {
   left: boolean;
 }
 
-export type GameKind = 'pavio' | 'stop' | 'quiz' | 'ear' | 'lava' | 'lie';
+export type GameKind = 'pavio' | 'stop' | 'quiz' | 'ear' | 'lava' | 'lie' | 'som';
 
 export interface PublicRoom {
   kind: 'pavio';

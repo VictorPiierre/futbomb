@@ -12,6 +12,7 @@ import { QuizRoom } from './quiz-room.ts';
 import { EarRoom } from './ear-room.ts';
 import { LavaRoom } from './lava-room.ts';
 import { LieRoom } from './lie-room.ts';
+import { SomRoom } from './som-room.ts';
 import { difficultyCounts, QUIZ_TOTAL } from './quiz-bank.ts';
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -22,7 +23,7 @@ const ROOM_TTL_MS = 30 * 60_000;
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: true }, pingInterval: 10_000, pingTimeout: 20_000 });
-type AnyRoom = Room | StopRoom | QuizRoom | EarRoom | LavaRoom | LieRoom;
+type AnyRoom = Room | StopRoom | QuizRoom | EarRoom | LavaRoom | LieRoom | SomRoom;
 const rooms = new Map<string, AnyRoom>();
 
 app.get('/api/health', (_req, res) => {
@@ -99,6 +100,7 @@ io.on('connection', (socket) => {
       : payload?.game === 'ear' ? new EarRoom(code, io, removeRoom)
       : payload?.game === 'lava' ? new LavaRoom(code, io, removeRoom)
       : payload?.game === 'lie' ? new LieRoom(code, io, removeRoom)
+      : payload?.game === 'som' ? new SomRoom(code, io, removeRoom)
       : new Room(code, io, removeRoom);
     rooms.set(room.code, room);
     const m = room.addMember(name, cleanAvatar(payload?.avatar), socket.id);
@@ -249,6 +251,20 @@ io.on('connection', (socket) => {
   socket.on('lie:next', () => {
     const { room, memberId } = current(socket);
     if (room instanceof LieRoom) room.next(memberId);
+  });
+
+  // ---------- Faz Esse Som! ----------
+  socket.on('som:clip', (data: unknown, mime: string, ack?: (r: unknown) => void) => {
+    const { room, memberId } = current(socket);
+    ack?.(room instanceof SomRoom ? room.submitClip(memberId, data, mime) : { ok: false, error: 'Sala não encontrada.' });
+  });
+  socket.on('som:vote', (slot: number, ack?: (r: unknown) => void) => {
+    const { room, memberId } = current(socket);
+    ack?.(room instanceof SomRoom ? room.vote(memberId, slot) : { ok: false, error: 'Sala não encontrada.' });
+  });
+  socket.on('som:next', () => {
+    const { room, memberId } = current(socket);
+    if (room instanceof SomRoom) room.next(memberId);
   });
 
   socket.on('disconnect', () => {

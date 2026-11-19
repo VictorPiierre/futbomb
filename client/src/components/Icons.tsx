@@ -31,7 +31,7 @@ export const IconLink = (p: P) => (
   <svg {...base} {...p}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg>
 );
 
-export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game?: 'pavio' | 'stop' | 'quiz' | 'ear' | 'lava' | 'lie' | 'hub' }) {
+export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game?: 'pavio' | 'stop' | 'quiz' | 'ear' | 'lava' | 'lie' | 'som' | 'hub' }) {
   const big = size === 'lg';
   const mark = big ? 'h-16 w-16 sm:h-20 sm:w-20' : 'h-9 w-9';
   if (game === 'hub') {
@@ -39,6 +39,14 @@ export function Logo({ size = 'md', game = 'pavio' }: { size?: 'md' | 'lg'; game
       <span className={`font-display leading-none ${big ? 'title-stroke text-5xl sm:text-6xl' : 'text-xl'}`}>
         Joga<span className="text-fire">tina</span>
       </span>
+    );
+  }
+  if (game === 'som') {
+    return (
+      <div className={`flex items-center ${big ? 'gap-3' : 'gap-2'}`}>
+        <SomMark className={mark} />
+        <span className={`font-display leading-none text-sky ${big ? 'text-5xl sm:text-7xl' : 'text-xl'}`}>Faz Esse Som!</span>
+      </div>
     );
   }
   if (game === 'lie') {
@@ -101,6 +109,19 @@ export function LieMark({ className = '' }: { className?: string }) {
       <circle cx="32" cy="26" r="3" fill="#b388ff" />
       <path d="M24 30 L58 30 L60 33 L24 34 Z" fill="#ffd23f" stroke="#120d1b" strokeWidth="1.2" strokeLinejoin="round" />
       <path d="M17 37q8 5 16 0" fill="none" stroke="#b388ff" strokeWidth="2.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Marca do Faz Esse Som!: microfone com ondas de som. */
+export function SomMark({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} aria-hidden>
+      <path d="M10 22q-5 10 0 20M54 22q5 10 0 20" fill="none" stroke="#ff3d7f" strokeWidth="3.2" strokeLinecap="round" />
+      <path d="M16 26q-3 6 0 12M48 26q3 6 0 12" fill="none" stroke="#ffd23f" strokeWidth="3.2" strokeLinecap="round" />
+      <rect x="22" y="6" width="20" height="32" rx="10" fill="#241c33" stroke="#38bdf8" strokeWidth="3.2" />
+      <path d="M27 16h10M27 22h10M27 28h10" stroke="#38bdf8" strokeWidth="2.4" strokeLinecap="round" />
+      <path d="M18 32q0 14 14 14t14-14M32 46v9M23 56h18" fill="none" stroke="#38bdf8" strokeWidth="3.2" strokeLinecap="round" />
     </svg>
   );
 }

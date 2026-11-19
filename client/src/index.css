@@ -239,3 +239,21 @@ body {
 @keyframes sink {
   to { transform: translateY(30px); opacity: 0.4; }
 }
+
+/* Faz Esse Som!: equalizador e emoji balançando enquanto toca */
+.eq-bar {
+  height: 100%;
+  transform-origin: bottom;
+  animation: eq-bounce 0.45s ease-in-out infinite alternate;
+}
+@keyframes eq-bounce {
+  from { transform: scaleY(0.25); }
+  to { transform: scaleY(1); }
+}
+.wiggle {
+  animation: wiggle 0.35s ease-in-out infinite;
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-8deg) scale(1.05); }
+  50% { transform: rotate(8deg) scale(1.12); }
+}

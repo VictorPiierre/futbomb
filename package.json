@@ -22,8 +22,11 @@
     "quiz:popularity": "tsx scripts/quiz-popularity.ts",
     "smoke:ear": "tsx scripts/smoke-ear.ts",
     "gen:ear-audio": "tsx scripts/gen-ear-audio.ts",
+    "gen:som": "tsx scripts/gen-som.ts",
+    "som:add": "tsx scripts/add-som.ts",
     "smoke:lava": "tsx scripts/smoke-lava.ts",
-    "smoke:lie": "tsx scripts/smoke-lie.ts"
+    "smoke:lie": "tsx scripts/smoke-lie.ts",
+    "smoke:som": "tsx scripts/smoke-som.ts"
   },
   "dependencies": {
     "express": "^5.3.0",
