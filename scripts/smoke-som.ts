@@ -80,26 +80,62 @@ for (let round = 1; round <= 3; round++) {
   await c.emit('som:clip', fakeClip('C'), 'audio/webm');
   await waitFor(() => a.state?.phase === 'vote', 5000);
   await waitFor(() => a.clips?.round === round && b.clips?.round === round && c.clips?.round === round, 5000);
-  check(a.state!.clipCount === 3 && a.clips!.clips.length === 3, '3 imitações na votação');
-  const slotOf = (cl: Client) => cl.clips!.clips.find((x) => x.mine)!.slot;
-  check([a, b, c].every((cl) => cl.clips!.clips.filter((x) => x.mine).length === 1), 'cada um sabe qual é só a sua imitação');
-  check(new Set([slotOf(a), slotOf(b), slotOf(c)]).size === 3, 'slots diferentes para cada um');
-  const self = await a.emit<{ ok: boolean }>('som:vote', slotOf(a));
-  check(!self.ok, 'não dá para votar em si mesmo');
-  // Ana recebe 2 votos (Beto e Caio), Beto recebe 1 (Ana).
-  await a.emit('som:vote', slotOf(b));
-  await b.emit('som:vote', slotOf(a));
-  await c.emit('som:vote', slotOf(a));
-  await waitFor(() => a.state?.phase === 'results', 30_000);
+  const order = a.state!.order;
+  check(order.length === 3 && a.clips!.clips.length === 3, '3 imitações no desfile');
+  check([a, b, c].every((cl) => cl.clips!.clips.find((x) => x.mine)!.slot === order.indexOf(cl.id) + 1), 'a gravação de cada um bate com a ordem do desfile (foto e nome certos)');
+
+  // Começa relembrando o original e só passa quando o dono aperta "Próximo".
+  check(a.state!.slide!.index === -1 && a.state!.endsAt === null, 'desfile começa relembrando o original, sem tempo correndo');
+  b.socket.emit('som:next');
+  await sleep(1200);
+  check(a.state!.slide!.index === -1, 'não avança sozinho e só o dono passa para o próximo');
+  a.socket.emit('som:next');
+
+  // Notas planejadas: Ana leva 🔥🔥 (+4), Beto 😐😬 (+1), Caio 😬😬 (+0).
+  const plan: Record<string, Record<string, string>> = {
+    [a.id]: { [b.id]: 'bom', [c.id]: 'bom' },
+    [b.id]: { [a.id]: 'meh', [c.id]: 'ruim' },
+    [c.id]: { [a.id]: 'ruim', [b.id]: 'ruim' },
+  };
+  for (let i = 0; i < 3; i++) {
+    await waitFor(() => a.state?.slide?.index === i);
+    const target = order[i];
+    const owner = [a, b, c].find((cl) => cl.id === target)!;
+    if (round === 1 && i === 0) {
+      const self = await owner.emit<{ ok: boolean }>('som:vote', 'bom');
+      check(!self.ok, 'não dá para votar em si mesmo');
+      const bad = await [a, b, c].find((cl) => cl !== owner)!.emit<{ ok: boolean }>('som:vote', 'otimo');
+      check(!bad.ok, 'só vale Ruim, Meh ou Bom');
+    }
+    const voters = [a, b, c].filter((cl) => cl !== owner);
+    await voters[0].emit('som:vote', plan[target][voters[0].id]);
+    await sleep(100);
+    if (round === 1 && i === 0) check(a.state!.slide!.votes === null && !a.state!.slide!.reveal, 'as notas ficam escondidas até todos votarem');
+    await voters[1].emit('som:vote', plan[target][voters[1].id]);
+    await waitFor(() => !!a.state?.slide?.reveal);
+    const t = a.state!.slide!.votes!;
+    check(
+      Object.entries(plan[target]).every(([voter, r]) => t[r as 'bom' | 'meh' | 'ruim'].includes(voter)),
+      `notas de ${owner === a ? 'Ana' : owner === b ? 'Beto' : 'Caio'}: 😬${t.ruim.length} 😐${t.meh.length} 🔥${t.bom.length} (com quem votou)`,
+    );
+    if (round === 1 && i === 0) {
+      await sleep(1000);
+      check(a.state!.slide!.index === 0 && a.state!.phase === 'vote', 'depois das notas, espera o dono');
+    }
+    a.socket.emit('som:next');
+  }
+  await waitFor(() => a.state?.phase === 'results', 5000);
   const g = a.state!.gained!;
-  check(g[a.id] === 5 && g[b.id] === 1 && g[c.id] === 0, `pontos: Ana +${g[a.id]} (2 votos + 3 bônus), Beto +${g[b.id]}, Caio +${g[c.id]}`);
+  check(g[a.id] === 4 && g[b.id] === 1 && g[c.id] === 0, `pontos: Ana +${g[a.id]} (🔥🔥), Beto +${g[b.id]} (😐😬), Caio +${g[c.id]} (😬😬)`);
   const top = a.state!.results![0];
-  check(top.playerId === a.id && top.winner && top.voters.length === 2, 'Ana aparece em primeiro com a coroa');
+  check(top.playerId === a.id && top.best && top.points === 4, 'Ana aparece em primeiro com a coroa');
+  await sleep(1000);
+  check(a.state!.phase === 'results' && a.state!.endsAt === null, 'o resultado também espera o dono');
   a.socket.emit('som:next');
 }
 await waitFor(() => a.state?.phase === 'ended');
 check(seen.size === 3, 'sons diferentes em cada rodada');
-check(a.state!.winnerId === a.id && a.state!.ranking![0].score === 10, `Ana campeã com ${a.state!.ranking![0].score} pontos`);
+check(a.state!.winnerId === a.id && a.state!.ranking![0].score === 8, `Ana campeã com ${a.state!.ranking![0].score} pontos`);
 
 for (const cl of [a, b, c]) cl.socket.close();
 console.log(failures ? `\n${failures} falha(s)` : '\nTudo certo!');

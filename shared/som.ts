@@ -11,15 +11,23 @@ export const SOM_MAX_PLAYERS = [4, 6, 8] as const;
 export const SOM_COUNTDOWN_MS = 3_000;
 /** Duração máxima de cada gravação. */
 export const SOM_MAX_REC_MS = 3_000;
-/** Na votação, cada áudio (original + imitações) toca em sequência neste intervalo. */
-export const SOM_SLOT_MS = 3_800;
-/** Tempo extra para votar depois que todas as imitações tocaram. */
-export const SOM_VOTE_EXTRA_MS = 15_000;
-export const SOM_RESULTS_MS = 9_000;
-/** Cada voto recebido vale isto... */
-export const SOM_VOTE_POINTS = 1;
-/** ...e quem tiver mais votos na rodada ganha este bônus. */
-export const SOM_WIN_POINTS = 3;
+/**
+ * Desfile das imitações: aparece uma pessoa por vez (foto e nome em destaque), toca a gravação dela
+ * e todo mundo dá a nota — Ruim, Meh ou Bom. Antes, toca o original de novo para relembrar.
+ * Quem passa para a próxima é o dono da sala (botão "Próximo"); nada avança sozinho.
+ */
+/** Da troca de tela até a gravação tocar. */
+export const SOM_SLIDE_LEAD_MS = 700;
+/** Quando todos já votaram, as notas aparecem depois de pelo menos isto (dá para ouvir a imitação inteira). */
+export const SOM_SLIDE_MIN_MS = 3_500;
+
+export type SomRating = 'ruim' | 'meh' | 'bom';
+export const SOM_RATING_ORDER: SomRating[] = ['ruim', 'meh', 'bom'];
+export const SOM_RATINGS: Record<SomRating, { emoji: string; label: string; points: number }> = {
+  ruim: { emoji: '😬', label: 'Ruim', points: 0 },
+  meh: { emoji: '😐', label: 'Meh', points: 1 },
+  bom: { emoji: '🔥', label: 'Bom', points: 2 },
+};
 /** Tamanho máximo de uma gravação enviada (bytes). */
 export const SOM_MAX_CLIP_BYTES = 400_000;
 
@@ -53,10 +61,25 @@ export interface SomSound {
 /** Resultado da rodada para cada imitação. */
 export interface SomResult {
   playerId: string;
-  /** Posição da imitação na votação (Imitação #n). */
+  /** Posição da imitação no desfile (a gravação chega com este número). */
   slot: number;
-  voters: string[];
-  winner: boolean;
+  /** Quem deu cada nota. */
+  votes: Record<SomRating, string[]>;
+  points: number;
+  /** Maior pontuação da rodada. */
+  best: boolean;
+}
+
+/** Imitação que está na tela no desfile. */
+export interface SomSlide {
+  /** -1 = relembrando o original; 0.. = posição em `order`. */
+  index: number;
+  /** Quando o áudio deste slide toca para todos. */
+  playAt: number;
+  /** Mostrando o placar deste slide. */
+  reveal: boolean;
+  /** Notas recebidas (só aparecem no placar do slide). */
+  votes: Record<SomRating, string[]> | null;
 }
 
 export interface SomPublicRoom {
@@ -73,12 +96,11 @@ export interface SomPublicRoom {
   /** Quando o som original toca para todos (fase record). */
   playAt: number | null;
   endsAt: number | null;
-  /** Votação: quantas imitações existem (as gravações chegam pelo evento som:clips). */
-  clipCount: number;
+  /** Ordem do desfile (ids dos jogadores que gravaram); a gravação de order[i] é o slot i+1. */
+  order: string[];
+  slide: SomSlide | null;
   /** Quantos sons existem agora no jogo (inclui os salvos há pouco pelo /admin). */
   soundCount: number;
-  /** Quando começa a sequência original + imitações na votação. */
-  playlistAt: number | null;
   results: SomResult[] | null;
   gained: Record<string, number> | null;
   ranking: { playerId: string; name: string; avatar: string; place: number; score: number; left: boolean }[] | null;
@@ -86,11 +108,10 @@ export interface SomPublicRoom {
   serverNow: number;
 }
 
-/** Gravações da rodada. Na votação vão sem dono (só o slot); o dono aparece no resultado. */
+/** Gravações da rodada (o dono de cada slot está em `order`). */
 export interface SomClip {
   slot: number;
   mime: string;
   data: ArrayBuffer;
-  /** Só preenchido para a sua própria gravação (para não votar em si mesmo). */
   mine: boolean;
 }

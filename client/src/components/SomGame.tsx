@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  SOM_MAX_PLAYERS, SOM_MAX_REC_MS, SOM_RECORD_TIMES, SOM_ROUNDS, SOM_SLOT_MS, SOM_VOTE_POINTS, SOM_WIN_POINTS,
+  SOM_MAX_PLAYERS, SOM_MAX_REC_MS, SOM_RATING_ORDER, SOM_RATINGS, SOM_RECORD_TIMES, SOM_ROUNDS, type SomRating,
   type SomClip, type SomPublicRoom, type SomSettings,
 } from '../../../shared/som';
 import { emitAck, inviteLink, serverNow, socket, useSocketEvent } from '../net';
@@ -22,19 +22,20 @@ interface Props {
 
 // ---------- estado fora do React (sobrevive a remontagens) ----------
 
-type Mine = { round: number; recorded: boolean; vote: number | null };
-let mine: Mine = { round: 0, recorded: false, vote: null };
+type Mine = { round: number; recorded: boolean; slide?: number; vote?: SomRating | null };
+let mine: Mine = { round: 0, recorded: false };
 socket.on('som:mine', (p: Mine) => (mine = p));
 
 interface LoadedClip {
   slot: number;
   mine: boolean;
+  mime: string;
   audio: ClipAudio;
 }
 let clipStore: { round: number; clips: LoadedClip[] } | null = null;
 const clipListeners = new Set<() => void>();
 socket.on('som:clips', async (p: { round: number; clips: SomClip[] }) => {
-  const clips = await Promise.all(p.clips.map(async (c) => ({ slot: c.slot, mine: c.mine, audio: await prepareClip(c.data, c.mime) })));
+  const clips = await Promise.all(p.clips.map(async (c) => ({ slot: c.slot, mine: c.mine, mime: c.mime, audio: await prepareClip(c.data, c.mime) })));
   if (clipStore) for (const c of clipStore.clips) URL.revokeObjectURL(c.audio.url);
   clipStore = { round: p.round, clips };
   for (const l of clipListeners) l();
@@ -296,105 +297,208 @@ function Record({ room, meId }: Props) {
   );
 }
 
-// ---------- ouvir as imitações e votar ----------
+// ---------- desfile: uma imitação por vez ----------
 
-function Vote({ room, meId }: Props) {
+/** Baixa a gravação de alguém (o arquivo leva o nome da pessoa e do som). */
+function downloadClip(clip: LoadedClip, who: string, sound: string) {
+  const type = clip.mime.split(';')[0];
+  const ext = type.includes('mp4') || type.includes('aac') ? 'm4a' : type.includes('ogg') ? 'ogg' : type.includes('mpeg') ? 'mp3' : type.includes('wav') ? 'wav' : 'webm';
+  const slug = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'som';
+  const a = document.createElement('a');
+  a.href = clip.audio.url;
+  a.download = `${slug(who)}-imitando-${slug(sound)}.${ext}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function DownloadButton({ clip, who, sound, className = '' }: { clip: LoadedClip | undefined; who: string; sound: string; className?: string }) {
+  if (!clip) return null;
+  return (
+    <button onClick={() => downloadClip(clip, who, sound)} className={`btn-secondary px-3 text-sm ${className}`} title="Baixar o áudio" aria-label={`Baixar o áudio de ${who}`}>
+      ⬇️ <span className="hidden sm:inline">Baixar</span>
+    </button>
+  );
+}
+
+/** Botão "Próximo" (só o dono da sala vê). */
+function HostNext({ isHost, label, hostName }: { isHost: boolean; label: string; hostName: string }) {
+  return isHost ? (
+    <button onClick={() => socket.emit('som:next')} className="btn-primary w-full py-3.5 text-lg">
+      {label}
+    </button>
+  ) : (
+    <p className="rounded-xl bg-panel-2 py-3 text-center text-sm text-muted">Esperando {hostName} passar para o próximo…</p>
+  );
+}
+
+const playedSlides = new Set<string>();
+
+function Vote({ room, meId, isHost }: Props) {
   const me = room.players.find((p) => p.id === meId);
   const playing = !!me && !me.left;
   const clips = useClips(room.round);
-  const now = useNow();
   const nowPlaying = useNowPlaying();
-  const [vote, setVote] = useState<number | null>(() => (mine.round === room.round ? mine.vote : null));
-  const [error, setError] = useState('');
   const sound = room.sound!;
-  const playlistAt = room.playlistAt ?? 0;
-  const playlistEnd = playlistAt + SOM_SLOT_MS * (room.clipCount + 1);
-  const listening = now < playlistEnd;
+  const slide = room.slide!;
+  const index = slide.index;
+  const total = room.order.length;
+  const targetId = index >= 0 ? room.order[index] : null;
+  const target = targetId ? room.players.find((p) => p.id === targetId) : null;
+  const clip = index >= 0 ? clips?.find((c) => c.slot === index + 1) : undefined;
+  const mineSlide = targetId === meId;
+  const [vote, setVote] = useState<SomRating | null>(() => (mine.round === room.round && mine.slide === index ? (mine.vote ?? null) : null));
+  const [error, setError] = useState('');
+  const key = `${room.code}-${room.round}-${index}`;
+  const onAir = index < 0 ? nowPlaying === 'original' : nowPlaying === `clip-${index + 1}`;
 
-  // Sequência automática: original, depois cada imitação.
+  // Cada slide toca sozinho uma vez, na mesma hora para todo mundo.
   useEffect(() => {
-    if (!clips || !room.playlistAt) return;
-    const timers: number[] = [];
-    const items: { key: string; src: () => Promise<AudioBuffer | ClipAudio | null> }[] = [
-      { key: 'original', src: () => loadSound(sound.id, sound.file) },
-      ...clips.map((c) => ({ key: `clip-${c.slot}`, src: async () => c.audio })),
-    ];
-    items.forEach((it, i) => {
-      const at = room.playlistAt! + SOM_SLOT_MS * i;
-      const wait = at - serverNow() - 300;
-      if (at < serverNow()) return;
-      timers.push(window.setTimeout(async () => playAudio(it.key, await it.src(), at), Math.max(0, wait)));
-    });
-    return () => timers.forEach(clearTimeout);
-  }, [clips, room.playlistAt, sound.id]);
+    if (playedSlides.has(key) || serverNow() > slide.playAt + 4000) return;
+    if (index < 0) {
+      playedSlides.add(key);
+      void loadSound(sound.id, sound.file).then((buf) => playAudio('original', buf, slide.playAt));
+    } else if (clip) {
+      playedSlides.add(key);
+      playAudio(`clip-${index + 1}`, clip.audio, slide.playAt);
+    }
+  }, [key, clip, index, slide.playAt, sound.id, sound.file]);
   useEffect(() => () => stopPlayback(), []);
+  useEffect(() => {
+    if (slide.reveal && targetId === meId) {
+      const pts = SOM_RATING_ORDER.reduce((n, r) => n + (slide.votes?.[r].length ?? 0) * SOM_RATINGS[r].points, 0);
+      if (pts > 0) sfx.correct();
+    }
+  }, [slide.reveal, targetId, meId, slide.votes]);
 
-  async function choose(slot: number) {
-    const res = await emitAck<{ ok: boolean; error?: string }>('som:vote', slot);
+  async function choose(r: SomRating) {
+    const res = await emitAck<{ ok: boolean; error?: string }>('som:vote', r);
     if (res.ok) {
-      setVote(slot);
+      setVote(r);
       setError('');
       sfx.myTurn();
     } else setError(res.error ?? 'Não deu.');
   }
 
+  // ---- relembrando o original ----
+  if (index < 0) {
+    return (
+      <section className="glass rounded-3xl p-5 sm:p-7">
+        <SoundGate />
+        <RoundHeader room={room} />
+        <h2 className="mt-2 font-display text-2xl sm:text-3xl">🔁 Relembrando o som original…</h2>
+        <SoundCard room={room} />
+        <p className="mt-4 text-sm text-muted">
+          Agora vem o desfile: {total} {total === 1 ? 'imitação' : 'imitações'}, uma de cada vez. Vote <b className="text-white">😬 Ruim</b>, <b className="text-white">😐 Meh</b> ou{' '}
+          <b className="text-white">🔥 Bom</b>!
+        </p>
+        <div className="mt-5">
+          <HostNext isHost={isHost} label="Começar o desfile →" hostName={room.hostName} />
+        </div>
+      </section>
+    );
+  }
+
+  const votes = slide.votes;
+  const gained = votes ? SOM_RATING_ORDER.reduce((n, r) => n + votes[r].length * SOM_RATINGS[r].points, 0) : 0;
+  const player = (id: string) => room.players.find((p) => p.id === id);
+
   return (
     <section className="glass rounded-3xl p-5 sm:p-7">
       <SoundGate />
-      <RoundHeader room={room} />
-      <h2 className="mt-2 font-display text-2xl sm:text-3xl">{listening ? '🎧 Ouvindo as imitações…' : '🗳️ Qual foi a melhor imitação?'}</h2>
-      <Timer endsAt={room.endsAt} total={room.endsAt ? room.endsAt - playlistAt : 1} />
-
-      <button
-        onClick={async () => playAudio('original', await loadSound(sound.id, sound.file))}
-        className={`mt-3 flex w-full cursor-pointer items-center gap-3 rounded-2xl border-2 p-3 text-left transition ${nowPlaying === 'original' ? 'border-sky bg-sky/15' : 'border-line bg-panel-2 hover:border-sky/50'}`}
-      >
-        <span className={`text-3xl ${nowPlaying === 'original' ? 'wiggle' : ''}`}>{sound.emoji}</span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-xs font-semibold tracking-wider text-muted uppercase">Original</span>
-          <span className="block font-display text-lg leading-tight">{sound.title}</span>
-        </span>
-        <span className="text-sky">{nowPlaying === 'original' ? <Eq on /> : '▶'}</span>
-      </button>
-
-      {!clips ? (
-        <p className="mt-4 rounded-2xl bg-panel-2 p-4 text-center text-sm text-muted">Carregando as gravações…</p>
-      ) : (
-        <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
-          {clips.map((c, i) => {
-            const on = nowPlaying === `clip-${c.slot}`;
-            const voted = vote === c.slot;
-            return (
-              <div
-                key={c.slot}
-                className={`pop-in rounded-2xl border-2 p-3 transition ${on ? 'border-sky bg-sky/15' : voted ? 'border-ok bg-ok/10' : c.mine ? 'border-dashed border-line bg-panel-2/50' : 'border-line bg-panel-2'}`}
-                style={{ animationDelay: `${i * 80}ms` }}
-              >
-                <div className="flex items-center gap-3">
-                  <button onClick={() => playAudio(`clip-${c.slot}`, c.audio)} className="grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-sky/20 text-xl text-sky hover:bg-sky/30" aria-label={`Ouvir imitação ${c.slot}`}>
-                    {on ? <Eq on /> : '▶'}
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-display text-lg">Imitação #{c.slot}</p>
-                    <p className="text-xs text-muted">{c.mine ? 'sua imitação' : on ? 'tocando…' : 'toque para ouvir'}</p>
-                  </div>
-                </div>
-                {playing && !c.mine && (
-                  <button
-                    onClick={() => choose(c.slot)}
-                    className={`mt-2.5 w-full cursor-pointer rounded-xl py-2 text-sm font-bold transition ${voted ? 'bg-ok text-ink' : 'bg-ink/50 text-white hover:bg-sky/25'}`}
-                  >
-                    {voted ? '✅ Seu voto (dá para trocar)' : '👍 Votar nesta'}
-                  </button>
-                )}
-              </div>
-            );
-          })}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold tracking-[0.2em] text-muted uppercase">
+          Imitação {index + 1} de {total} · rodada {room.round}/{room.settings.rounds}
+        </p>
+        <div className="flex gap-1">
+          {room.order.map((id, i) => (
+            <span key={id} className={`h-2 w-6 rounded-full ${i < index ? 'bg-sky/60' : i === index ? 'bg-sky' : 'bg-panel-2'}`} />
+          ))}
         </div>
+      </div>
+
+      <div key={index} className="pop-in mt-4 flex flex-col items-center text-center">
+        <div className={`rounded-full p-1.5 transition ${onAir ? 'turn-glow bg-sky/30' : ''}`}>
+          <div className={onAir ? 'wiggle' : ''}>{target && <Avatar emoji={target.avatar} id={target.id} size={150} />}</div>
+        </div>
+        <p className={`mt-3 font-display text-4xl leading-tight sm:text-5xl ${targetId === meId ? 'text-sky' : ''}`}>
+          {target?.name ?? '?'}
+          {targetId === meId && <span className="block font-sans text-sm text-muted">(você)</span>}
+        </p>
+        <p className="mt-1 flex items-center gap-2 text-sm text-muted">
+          imitando {sound.emoji} <b className="text-white">{sound.title}</b> {onAir && <Eq on className="text-sky" />}
+        </p>
+        <div className="mt-3 flex flex-wrap justify-center gap-2">
+          <button
+            disabled={!clip}
+            onClick={() => clip && playAudio(`clip-${index + 1}`, clip.audio)}
+            className="btn-secondary px-4 text-sm disabled:opacity-40"
+          >
+            {onAir ? '🔊 Tocando…' : clip ? '🔁 Ouvir de novo' : 'Carregando…'}
+          </button>
+          <button onClick={async () => playAudio('original', await loadSound(sound.id, sound.file))} className="btn-secondary px-4 text-sm">
+            {nowPlaying === 'original' ? '🔊 Original…' : '▶ Original'}
+          </button>
+          <DownloadButton clip={clip} who={target?.name ?? 'imitacao'} sound={sound.title} />
+        </div>
+      </div>
+
+      {votes ? (
+        <div className="pop-in mt-6">
+          <div className="grid grid-cols-3 gap-2">
+            {SOM_RATING_ORDER.map((r) => (
+              <div key={r} className={`rounded-2xl border-2 p-3 text-center ${r === 'bom' ? 'border-ok/50 bg-ok/10' : r === 'meh' ? 'border-spark/40 bg-spark/10' : 'border-danger/40 bg-danger/10'}`}>
+                <p className="text-4xl">{SOM_RATINGS[r].emoji}</p>
+                <p className="font-display text-3xl">{votes[r].length}</p>
+                <p className="text-xs text-muted">{SOM_RATINGS[r].label}</p>
+                <div className="mt-1 flex flex-wrap justify-center gap-0.5">
+                  {votes[r].map((id) => {
+                    const v = player(id);
+                    return v ? <Avatar key={id} emoji={v.avatar} id={v.id} size={22} /> : null;
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-center font-display text-2xl text-ok">
+            {target?.name} +{gained} {gained === 1 ? 'ponto' : 'pontos'}
+          </p>
+        </div>
+      ) : playing && !mineSlide ? (
+        <div className="mt-6">
+          <p className="mb-2 text-center text-sm text-muted">Qual a nota dessa imitação?</p>
+          <div className="grid grid-cols-3 gap-2">
+            {SOM_RATING_ORDER.map((r) => (
+              <button
+                key={r}
+                onClick={() => choose(r)}
+                className={`cursor-pointer rounded-2xl border-2 py-4 text-center transition active:scale-95 ${
+                  vote === r
+                    ? r === 'bom'
+                      ? 'border-ok bg-ok/25 scale-105'
+                      : r === 'meh'
+                        ? 'border-spark bg-spark/25 scale-105'
+                        : 'border-danger bg-danger/25 scale-105'
+                    : 'border-line bg-panel-2 hover:border-sky/60'
+                }`}
+              >
+                <span className="block text-4xl sm:text-5xl">{SOM_RATINGS[r].emoji}</span>
+                <span className="mt-1 block font-display text-lg">{SOM_RATINGS[r].label}</span>
+              </button>
+            ))}
+          </div>
+          {vote && <p className="mt-2 text-center text-xs text-muted">Voto registrado — dá para trocar até as notas aparecerem.</p>}
+        </div>
+      ) : (
+        <p className="mt-6 rounded-xl bg-panel-2 p-3 text-center text-sm text-muted">
+          {mineSlide ? 'Essa é a sua! 🙈 Veja o que a galera acha…' : 'Você está assistindo esta partida.'}
+        </p>
       )}
-      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
-      {!playing && <p className="mt-4 rounded-xl bg-panel-2 p-3 text-center text-sm text-muted">Você está assistindo esta partida.</p>}
-      {playing && clips && clips.every((c) => c.mine) && <p className="mt-4 rounded-xl bg-panel-2 p-3 text-center text-sm text-muted">Só você gravou nesta rodada — não tem em quem votar.</p>}
+      {error && <p className="mt-2 text-center text-sm text-danger">{error}</p>}
+
+      <div className="mt-5">
+        <HostNext isHost={isHost} label={index + 1 >= total ? 'Ver resultado da rodada →' : 'Próximo →'} hostName={room.hostName} />
+      </div>
     </section>
   );
 }
@@ -404,24 +508,15 @@ function Vote({ room, meId }: Props) {
 function Results({ room, meId, isHost }: Props) {
   const results = room.results ?? [];
   const clips = useClips(room.round);
-  const now = useNow();
   const nowPlaying = useNowPlaying();
-  const remaining = room.endsAt ? Math.max(0, room.endsAt - now) : 0;
   const player = (id: string) => room.players.find((p) => p.id === id);
-  const gained = room.gained ?? {};
   const sound = room.sound!;
+  const last = room.round >= room.settings.rounds;
 
   useEffect(() => {
-    const won = results.find((r) => r.winner && r.playerId === meId);
+    const won = results.find((r) => r.best && r.playerId === meId);
     if (won) sfx.win();
     else if (results.length) sfx.correct();
-    // Toca a imitação vencedora.
-    const best = results.find((r) => r.winner);
-    const clip = best && clipStore?.round === room.round ? clipStore.clips.find((c) => c.slot === best.slot) : null;
-    if (clip) {
-      const t = window.setTimeout(() => playAudio(`clip-${clip.slot}`, clip.audio), 700);
-      return () => clearTimeout(t);
-    }
   }, []);
   useEffect(() => () => stopPlayback(), []);
 
@@ -431,7 +526,7 @@ function Results({ room, meId, isHost }: Props) {
       <div className="mt-2 flex items-center gap-3">
         <span className="text-4xl">{sound.emoji}</span>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold tracking-wider text-muted uppercase">Resultado</p>
+          <p className="text-xs font-semibold tracking-wider text-muted uppercase">Resultado da rodada</p>
           <p className="font-display text-2xl leading-tight">{sound.title}</p>
         </div>
         <button onClick={async () => playAudio('original', await loadSound(sound.id, sound.file))} className="btn-secondary px-3 text-sm">
@@ -448,56 +543,35 @@ function Results({ room, meId, isHost }: Props) {
             const clip = clips?.find((c) => c.slot === r.slot);
             const on = nowPlaying === `clip-${r.slot}`;
             return (
-              <li key={r.slot} className={`pop-in rounded-2xl border-2 p-3 ${r.winner ? 'border-spark bg-spark/10' : 'border-line bg-panel-2'}`} style={{ animationDelay: `${i * 150}ms` }}>
+              <li key={r.slot} className={`pop-in rounded-2xl border-2 p-3 ${r.best ? 'border-spark bg-spark/10' : 'border-line bg-panel-2'}`} style={{ animationDelay: `${i * 150}ms` }}>
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     {p && <Avatar emoji={p.avatar} id={p.id} size={44} />}
-                    {r.winner && <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-xl">👑</span>}
+                    {r.best && <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-xl">👑</span>}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className={`truncate font-display text-lg ${r.playerId === meId ? 'text-sky' : ''}`}>
-                      {p?.name ?? '?'} <span className="font-sans text-xs text-muted">· imitação #{r.slot}</span>
-                    </p>
-                    {r.winner && <p className="text-xs font-bold text-spark">🏆 {pick(BEST_IMITATION, `${room.code}-${room.round}-${r.slot}`)}</p>}
+                    <p className={`truncate font-display text-lg ${r.playerId === meId ? 'text-sky' : ''}`}>{p?.name ?? '?'}</p>
+                    {r.best && <p className="text-xs font-bold text-spark">🏆 {pick(BEST_IMITATION, `${room.code}-${room.round}-${r.slot}`)}</p>}
                     <p className="text-sm text-muted">
-                      {r.voters.length} {r.voters.length === 1 ? 'voto' : 'votos'}
-                      {(gained[r.playerId] ?? 0) > 0 && <b className="ml-2 text-ok">+{gained[r.playerId]}</b>}
+                      {SOM_RATING_ORDER.map((k) => `${SOM_RATINGS[k].emoji} ${r.votes[k].length}`).join('  ')}
+                      <b className="ml-2 text-ok">+{r.points}</b>
                     </p>
                   </div>
                   {clip && (
-                    <button onClick={() => playAudio(`clip-${r.slot}`, clip.audio)} className="grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-full bg-sky/20 text-sky hover:bg-sky/30" aria-label="Ouvir">
+                    <button onClick={() => playAudio(`clip-${r.slot}`, clip.audio)} className="grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-full bg-sky/20 text-sky hover:bg-sky/30" aria-label={`Ouvir ${p?.name}`}>
                       {on ? <Eq on /> : '▶'}
                     </button>
                   )}
+                  <DownloadButton clip={clip} who={p?.name ?? 'imitacao'} sound={sound.title} className="h-11" />
                 </div>
-                {r.voters.length > 0 && (
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-                    votaram:
-                    {r.voters.map((id) => {
-                      const v = player(id);
-                      return (
-                        <span key={id} className="flex items-center gap-1 rounded-full bg-ink/40 py-0.5 pr-2 pl-0.5">
-                          {v && <Avatar emoji={v.avatar} id={v.id} size={18} />} {v?.name}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
               </li>
             );
           })}
         </ul>
       )}
 
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <span className="text-sm text-muted">
-          {room.round >= room.settings.rounds ? 'Resultado final' : 'Próximo som'} em {Math.ceil(remaining / 1000)}s…
-        </span>
-        {isHost && (
-          <button onClick={() => socket.emit('som:next')} className="btn-primary px-5">
-            {room.round >= room.settings.rounds ? 'Ver campeão →' : 'Próximo →'}
-          </button>
-        )}
+      <div className="mt-5">
+        <HostNext isHost={isHost} label={last ? 'Ver campeão →' : 'Próximo som →'} hostName={room.hostName} />
       </div>
     </section>
   );
@@ -523,7 +597,7 @@ function Scoreboard({ room, meId }: { room: SomPublicRoom; meId: string }) {
             <div className="flex items-center gap-2.5">
               <Avatar emoji={p.avatar} id={p.id} size={30} dim={!p.connected} />
               <span className={`min-w-0 flex-1 truncate text-sm font-semibold ${p.id === meId ? 'text-sky' : ''}`}>{p.name}</span>
-              {waiting && <span className="text-xs">{p.done ? '✅' : room.phase === 'record' ? '🎙️' : '🤔'}</span>}
+              {waiting && <span className="text-xs">{room.phase === 'vote' && room.slide && room.order[room.slide.index] === p.id ? '🎤' : p.done ? '✅' : room.phase === 'record' ? '🎙️' : room.slide && room.slide.index < 0 ? '' : '🤔'}</span>}
               <span className="font-display text-lg tabular-nums">{p.score}</span>
             </div>
             <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-panel-2">
@@ -533,7 +607,7 @@ function Scoreboard({ room, meId }: { room: SomPublicRoom; meId: string }) {
         ))}
       </ul>
       <p className="mt-3 flex items-center gap-1.5 border-t border-line pt-3 text-xs text-muted">
-        <SomMark className="h-4 w-4 shrink-0" /> cada voto +{SOM_VOTE_POINTS} · mais votado da rodada +{SOM_WIN_POINTS}
+        <SomMark className="h-4 w-4 shrink-0" /> {SOM_RATING_ORDER.map((r) => `${SOM_RATINGS[r].emoji} ${SOM_RATINGS[r].label} +${SOM_RATINGS[r].points}`).join(' · ')}
       </p>
     </aside>
   );
@@ -657,8 +731,8 @@ function SomLobby({ room, meId, isHost, onCopy }: Props) {
         <div className="mt-6 rounded-2xl bg-panel/60 p-4 text-sm text-muted">
           <p className="mb-1 font-semibold text-white">Como funciona</p>
           Toca um som curtinho e absurdo — grito estourado, pum bass boosted, drop de phonk, bicho, efeito de videogame… Todo mundo tenta <b className="text-sky">imitar no microfone</b>{' '}
-          (dá para ouvir de novo antes de gravar). Depois todos escutam as imitações, sem saber de quem é cada uma, e votam na melhor — não vale votar em si mesmo.
-          Cada voto: <b className="text-white">+{SOM_VOTE_POINTS}</b>. Mais votado da rodada: <b className="text-white">+{SOM_WIN_POINTS}</b>. Melhor com 3 ou mais jogadores!
+          (dá para ouvir de novo antes de gravar). Depois vem o desfile: aparece a foto e o nome de cada um, toca a imitação e todo mundo vota <b className="text-white">😬 Ruim</b> (+0),{' '}
+          <b className="text-white">😐 Meh</b> (+1) ou <b className="text-white">🔥 Bom</b> (+2) — não vale votar em si mesmo. Dá para baixar o áudio de qualquer um. Quem passa para o próximo é o dono da sala.
         </div>
       </section>
 

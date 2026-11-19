@@ -1,9 +1,9 @@
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import type { Server } from 'socket.io';
 import {
-  SOM_COUNTDOWN_MS, SOM_MAX_CLIP_BYTES, SOM_MAX_PLAYERS, SOM_RECORD_TIMES, SOM_RESULTS_MS, SOM_ROUNDS, SOM_SLOT_MS,
-  SOM_VOTE_EXTRA_MS, SOM_VOTE_POINTS, SOM_WIN_POINTS,
-  type SomClip, type SomPhase, type SomPublicRoom, type SomResult, type SomSettings, type SomSound,
+  SOM_COUNTDOWN_MS, SOM_MAX_CLIP_BYTES, SOM_MAX_PLAYERS, SOM_RATING_ORDER, SOM_RATINGS, SOM_RECORD_TIMES,
+  SOM_ROUNDS, SOM_SLIDE_LEAD_MS, SOM_SLIDE_MIN_MS,
+  type SomClip, type SomPhase, type SomPublicRoom, type SomRating, type SomResult, type SomSettings, type SomSound,
 } from '../shared/som.ts';
 import { SOM_LIBRARY } from '../shared/som-library.ts';
 
@@ -30,8 +30,6 @@ interface Member {
   left: boolean;
   score: number;
   clip: { mime: string; data: Buffer } | null;
-  /** Slot da imitação em que votou. */
-  vote: number | null;
   graceTimer?: NodeJS.Timeout;
 }
 
@@ -57,9 +55,14 @@ export class SomRoom {
   private sound: SomSound | null = null;
   private playAt: number | null = null;
   private endsAt: number | null = null;
-  private playlistAt: number | null = null;
-  /** Ordem das imitações na votação: slot (1..n) -> id do jogador. */
+  /** Ordem do desfile: slot (1..n) -> id do jogador. */
   private slots: string[] = [];
+  /** Desfile: -1 = relembrando o original; depois uma imitação por vez. */
+  private slideIndex = -1;
+  private slidePlayAt = 0;
+  private slideReveal = false;
+  /** Notas da rodada: id de quem imitou -> (id de quem votou -> nota). */
+  private votes = new Map<string, Map<string, SomRating>>();
   private results: SomResult[] | null = null;
   private gained: Record<string, number> | null = null;
   private ranking: SomPublicRoom['ranking'] = null;
@@ -97,7 +100,7 @@ export class SomRoom {
     for (let i = 2; taken.has(unique.toLowerCase()); i++) unique = `${name} ${i}`;
     const m: Member = {
       id: randomUUID().slice(0, 8), token: randomBytes(16).toString('hex'), name: unique, avatar, socketId,
-      connected: true, role: canPlay ? 'player' : 'spectator', left: false, score: 0, clip: null, vote: null,
+      connected: true, role: canPlay ? 'player' : 'spectator', left: false, score: 0, clip: null,
     };
     this.members.push(m);
     if (!this.hostId) this.hostId = m.id;
@@ -214,13 +217,12 @@ export class SomRoom {
     for (const m of this.members) {
       m.score = 0;
       m.clip = null;
-      m.vote = null;
     }
     this.phase = 'lobby';
     this.sound = null;
     this.playAt = null;
-    this.playlistAt = null;
     this.slots = [];
+    this.votes.clear();
     this.results = null;
     this.gained = null;
     this.ranking = null;
@@ -248,11 +250,8 @@ export class SomRoom {
     this.slots = [];
     this.results = null;
     this.gained = null;
-    this.playlistAt = null;
-    for (const m of this.members) {
-      m.clip = null;
-      m.vote = null;
-    }
+    this.votes.clear();
+    for (const m of this.members) m.clip = null;
     this.phase = 'record';
     const now = Date.now();
     this.playAt = now + ms(SOM_COUNTDOWN_MS);
@@ -284,18 +283,67 @@ export class SomRoom {
     const withClip = this.activePlayers().filter((p) => p.clip);
     if (!withClip.length) return this.showResults();
     this.slots = shuffle(withClip.map((p) => p.id));
+    this.votes = new Map(this.slots.map((id) => [id, new Map()]));
     this.phase = 'vote';
-    const now = Date.now();
-    // Um tempinho para as gravações chegarem a todos antes de começar a tocar.
-    this.playlistAt = now + ms(1500);
-    const playlistEnd = this.playlistAt + ms(SOM_SLOT_MS) * (this.slots.length + 1);
-    this.endsAt = playlistEnd + ms(SOM_VOTE_EXTRA_MS);
-    this.timer = setTimeout(() => this.showResults(), this.endsAt - now);
+    // Primeiro relembra o original (e dá tempo das gravações chegarem a todos).
+    this.slideIndex = -1;
+    this.slideReveal = false;
+    this.slidePlayAt = Date.now() + ms(1500);
+    this.endsAt = null;
     for (const m of this.members) this.sendClips(m);
     this.broadcast();
   }
 
-  /** Envia as gravações para um membro (cada um sabe só qual é a sua). */
+  /** Próxima imitação do desfile (ou o resultado, depois da última). */
+  private nextSlide() {
+    if (this.phase !== 'vote') return;
+    clearTimeout(this.timer);
+    this.slideIndex++;
+    if (this.slideIndex >= this.slots.length) return this.showResults();
+    this.slideReveal = false;
+    this.slidePlayAt = Date.now() + ms(SOM_SLIDE_LEAD_MS);
+    this.endsAt = null;
+    this.broadcast();
+    this.checkSlide();
+  }
+
+  /** Mostra as notas da imitação atual (fica na tela até o dono apertar "Próximo"). */
+  private revealSlide() {
+    if (this.phase !== 'vote' || this.slideReveal) return;
+    clearTimeout(this.timer);
+    this.slideReveal = true;
+    this.broadcast();
+  }
+
+  /** Quem pode dar nota na imitação atual: jogadores ativos e conectados, menos o dono dela. */
+  private eligible() {
+    const target = this.slots[this.slideIndex];
+    return this.activePlayers().filter((p) => p.connected && p.id !== target);
+  }
+
+  private votedNow(id: string) {
+    const target = this.slots[this.slideIndex];
+    return !!target && !!this.votes.get(target)?.has(id);
+  }
+
+  /** Todo mundo já votou: mostra o placar (depois de dar tempo de ouvir a imitação inteira). */
+  private checkSlide() {
+    if (this.phase !== 'vote' || this.slideIndex < 0 || this.slideReveal) return;
+    const voters = this.eligible();
+    if (voters.length && voters.every((p) => this.votedNow(p.id))) {
+      clearTimeout(this.timer);
+      const wait = Math.max(ms(ALL_IN_DELAY_MS), this.slidePlayAt + ms(SOM_SLIDE_MIN_MS) - Date.now());
+      this.timer = setTimeout(() => this.revealSlide(), wait);
+    }
+  }
+
+  private tally(target: string | undefined): Record<SomRating, string[]> {
+    const t: Record<SomRating, string[]> = { ruim: [], meh: [], bom: [] };
+    for (const [voter, r] of this.votes.get(target ?? '') ?? []) t[r].push(voter);
+    return t;
+  }
+
+    /** Envia as gravações para um membro (cada um sabe só qual é a sua). */
   private sendClips(m: Member) {
     if (!m.socketId || !this.slots.length) return;
     const clips: SomClip[] = this.slots.map((id, i) => {
@@ -309,27 +357,23 @@ export class SomRoom {
   /** O que só o próprio jogador sabe: se já gravou e em quem votou. */
   private sendMine(m: Member) {
     if (!m.socketId) return;
-    this.io.to(m.socketId).emit('som:mine', { round: this.round, recorded: !!m.clip, vote: m.vote });
+    const target = this.phase === 'vote' ? this.slots[this.slideIndex] : undefined;
+    this.io.to(m.socketId).emit('som:mine', { round: this.round, recorded: !!m.clip, slide: this.slideIndex, vote: (target && this.votes.get(target)?.get(m.id)) ?? null });
   }
 
-  vote(by: string, slot: unknown): { ok: boolean; error?: string } {
+  /** Nota para a imitação que está na tela. */
+  vote(by: string, rating: unknown): { ok: boolean; error?: string } {
     const m = this.find(by);
     if (!m || m.role !== 'player' || m.left) return { ok: false, error: 'Você está assistindo.' };
-    if (this.phase !== 'vote') return { ok: false, error: 'Agora não é hora de votar.' };
-    const n = Number(slot);
-    const target = Number.isInteger(n) ? this.slots[n - 1] : undefined;
-    if (!target) return { ok: false, error: 'Imitação inválida.' };
+    if (this.phase !== 'vote' || this.slideIndex < 0) return { ok: false, error: 'Agora não é hora de votar.' };
+    if (this.slideReveal) return { ok: false, error: 'A votação desta imitação já fechou.' };
+    if (!SOM_RATING_ORDER.includes(rating as SomRating)) return { ok: false, error: 'Nota inválida.' };
+    const target = this.slots[this.slideIndex];
     if (target === m.id) return { ok: false, error: 'Não vale votar em você mesmo! 😏' };
-    const first = m.vote === null;
-    m.vote = n;
-    if (first) this.broadcast();
-    this.checkAllIn();
+    this.votes.get(target)!.set(m.id, rating as SomRating);
+    this.broadcast();
+    this.checkSlide();
     return { ok: true };
-  }
-
-  /** Quem pode votar: jogador ativo e conectado que tenha alguma imitação que não seja a dele. */
-  private voters() {
-    return this.activePlayers().filter((p) => p.connected && this.slots.some((id) => id !== p.id));
   }
 
   private checkAllIn() {
@@ -340,15 +384,7 @@ export class SomRoom {
         clearTimeout(this.timer);
         this.timer = setTimeout(() => this.startVote(), ALL_IN_DELAY_MS);
       }
-    } else if (this.phase === 'vote') {
-      const voters = this.voters();
-      if (voters.length && voters.every((p) => p.vote !== null)) {
-        // Todos votaram: espera a sequência de áudios terminar (para ninguém perder nenhuma imitação).
-        clearTimeout(this.timer);
-        const playlistEnd = (this.playlistAt ?? 0) + ms(SOM_SLOT_MS) * (this.slots.length + 1);
-        this.timer = setTimeout(() => this.showResults(), Math.max(ALL_IN_DELAY_MS, playlistEnd - Date.now()));
-      }
-    }
+    } else if (this.phase === 'vote') this.checkSlide();
   }
 
   private showResults() {
@@ -356,31 +392,33 @@ export class SomRoom {
     clearTimeout(this.timer);
     const players = this.activePlayers();
     const gained: Record<string, number> = Object.fromEntries(players.map((p) => [p.id, 0]));
-    const results: SomResult[] = this.slots.map((id, i) => ({
-      playerId: id,
-      slot: i + 1,
-      voters: players.filter((p) => p.vote === i + 1).map((p) => p.id),
-      winner: false,
-    }));
-    const top = Math.max(0, ...results.map((r) => r.voters.length));
+    // Cada nota vale pontos para quem imitou: Bom +2, Meh +1, Ruim 0.
+    const results: SomResult[] = this.slots.map((id, i) => {
+      const votes = this.tally(id);
+      const points = SOM_RATING_ORDER.reduce((n, r) => n + votes[r].length * SOM_RATINGS[r].points, 0);
+      return { playerId: id, slot: i + 1, votes, points, best: false };
+    });
+    const top = Math.max(0, ...results.map((r) => r.points));
     for (const r of results) {
-      r.winner = top > 0 && r.voters.length === top;
-      if (r.playerId in gained) gained[r.playerId] += r.voters.length * SOM_VOTE_POINTS + (r.winner ? SOM_WIN_POINTS : 0);
+      r.best = top > 0 && r.points === top;
+      if (r.playerId in gained) gained[r.playerId] += r.points;
     }
     for (const p of players) p.score += gained[p.id];
-    results.sort((a, b) => b.voters.length - a.voters.length || a.slot - b.slot);
+    results.sort((a, b) => b.points - a.points || a.slot - b.slot);
     this.results = results;
     this.gained = gained;
     this.phase = 'results';
     this.playAt = null;
-    const wait = ms(SOM_RESULTS_MS);
-    this.endsAt = Date.now() + wait;
-    this.timer = setTimeout(() => this.advance(), wait);
+    // Fica no resultado até o dono apertar "Próximo" (dá tempo de ouvir e baixar as gravações).
+    this.endsAt = null;
     this.broadcast();
   }
 
+  /** Botão "Próximo" do dono: próxima imitação do desfile, ou próxima rodada depois do resultado. */
   next(by: string) {
-    if (by === this.hostId && this.phase === 'results') this.advance();
+    if (by !== this.hostId) return;
+    if (this.phase === 'vote') this.nextSlide();
+    else if (this.phase === 'results') this.advance();
   }
 
   private advance() {
@@ -429,7 +467,7 @@ export class SomRoom {
       phase: this.phase,
       players: this.players.map((m) => ({
         id: m.id, name: m.name, avatar: m.avatar, connected: m.connected, left: m.left, score: m.score,
-        done: this.phase === 'record' ? m.clip !== null : this.phase === 'vote' ? m.vote !== null : false,
+        done: this.phase === 'record' ? m.clip !== null : this.phase === 'vote' ? this.votedNow(m.id) : false,
       })),
       spectators: this.members
         .filter((m) => m.role === 'spectator')
@@ -438,9 +476,9 @@ export class SomRoom {
       sound: this.phase === 'lobby' ? null : this.sound,
       playAt: this.phase === 'record' ? this.playAt : null,
       endsAt: this.endsAt,
-      clipCount: this.slots.length,
+      order: this.phase === 'vote' || this.phase === 'results' ? this.slots : [],
+      slide: this.phase === 'vote' ? { index: this.slideIndex, playAt: this.slidePlayAt, reveal: this.slideReveal, votes: this.slideReveal ? this.tally(this.slots[this.slideIndex]) : null } : null,
       soundCount: SOM_LIBRARY.length,
-      playlistAt: this.phase === 'vote' ? this.playlistAt : null,
       results: this.phase === 'results' ? this.results : null,
       gained: this.phase === 'results' ? this.gained : null,
       ranking: this.ranking,
