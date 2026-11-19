@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { THEMES, themePrompt, type AnswerResult, type GameFx, type PublicPlayer, type PublicRoom } from '../../../shared/types';
 import { emitAck, socket, useSocketEvent } from '../net';
 import { sfx } from '../sound';
+import { ELIMINATED, EXPLODE, pick } from '../zoeira';
 import Avatar, { Hearts } from './Avatar';
 import Bomb from './Bomb';
 import { IconCrown, IconSend } from './Icons';
@@ -71,7 +72,7 @@ export default function Arena({ room, meId, me }: Props) {
         arenaRef.current?.animate(KICK, { duration: 350, easing: 'ease-out' });
         setFeed({
           key,
-          text: `💥 ${nameOf(fx.playerId)} não respondeu a tempo e ${fx.lives === 0 ? 'perdeu a última vida' : 'perdeu uma vida'}!`,
+          text: `${pick(EXPLODE, `${fx.playerId}-${fx.lives}-${players.length}`)(nameOf(fx.playerId))} ${fx.lives === 0 ? '(última vida!)' : `(${fx.lives} ${fx.lives === 1 ? 'vida' : 'vidas'})`}`,
           tone: 'bad',
         });
         sfx.explode();
@@ -80,7 +81,7 @@ export default function Arena({ room, meId, me }: Props) {
       case 'eliminated':
         setFeed({
           key,
-          text: fx.reason === 'left' ? `${nameOf(fx.playerId)} saiu da partida.` : `☠️ ${nameOf(fx.playerId)} foi eliminado!`,
+          text: fx.reason === 'left' ? `${nameOf(fx.playerId)} saiu da partida.` : pick(ELIMINATED, fx.playerId)(nameOf(fx.playerId)),
           tone: 'bad',
         });
         setTimeout(() => sfx.eliminated(), 450);

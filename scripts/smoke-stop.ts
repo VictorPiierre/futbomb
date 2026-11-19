@@ -29,10 +29,16 @@ async function waitFor(fn: () => boolean, ms = 20_000) {
 class Client {
   socket: Socket;
   state: StopPublicRoom | null = null;
+  own: { round: number; ids: string[] } = { round: 0, ids: [] };
   id = '';
   constructor() {
     this.socket = io(URL, { transports: ['websocket'] });
     this.socket.on('room:state', (s) => (this.state = s));
+    this.socket.on('stop:own', (p) => (this.own = p));
+  }
+  /** Minha resposta (anônima) numa categoria, vista no estado de quem pergunta. */
+  ans(cat: Theme, viewer: Client = this) {
+    return viewer.state!.answers![cat]!.find((x) => this.own.ids.includes(x.id))!;
   }
   emit<T>(ev: string, ...args: unknown[]) {
     return new Promise<T>((r) => this.socket.emit(ev, ...args, r));
@@ -79,10 +85,13 @@ for (let round = 1; round <= 3; round++) {
   check(stop.ok, 'Ana deu STOP com tudo preenchido');
 
   await waitFor(() => a.state?.phase === 'review');
+  await waitFor(() => [a, b, c].every((cl) => cl.own.round === round && cl.own.ids.length === CATS.length));
   const ans = a.state!.answers!;
-  const caioColor = ans.colors!.find((x) => x.playerId === c.id)!;
+  check(Object.values(ans).every((l) => l!.every((x) => !('playerId' in x))), 'respostas anônimas: ninguém recebe o autor');
+  check(new Set([...a.own.ids, ...b.own.ids, ...c.own.ids]).size === 9, 'cada um recebe só os ids das próprias respostas');
+  const caioColor = c.ans('colors', a);
   check(caioColor.status === 'empty' && !caioColor.valid, 'resposta em branco não vale');
-  const betoFood = ans.foods!.find((x) => x.playerId === b.id)!;
+  const betoFood = b.ans('foods', a);
   check(betoFood.status === 'ok' && betoFood.valid, 'palavra inventada começa valendo (quem decide são os jogadores)');
   check(a.state!.reviewIndex === 0, 'correção começa pela primeira categoria, igual para todos');
 
@@ -90,19 +99,20 @@ for (let round = 1; round <= 3; round++) {
   for (let i = 0; i < CATS.length; i++) {
     await waitFor(() => a.state?.reviewIndex === i);
     if (round === 1 && i === 0) {
-      a.socket.emit('stop:vote', { category: 'foods', playerId: b.id, valid: false });
+      a.socket.emit('stop:vote', { category: 'foods', answerId: b.ans('foods', a).id, valid: false });
       await sleep(200);
-      check(a.state!.answers!.foods!.find((x) => x.playerId === b.id)!.against.length === 0, 'voto em categoria que não está em correção é ignorado');
-      a.socket.emit('stop:vote', { category: 'animals', playerId: a.id, valid: false });
+      check(b.ans('foods', a).against.length === 0, 'voto em categoria que não está em correção é ignorado');
+      a.socket.emit('stop:vote', { category: 'animals', answerId: a.ans('animals', a).id, valid: false });
       await sleep(200);
-      check(a.state!.answers!.animals!.find((x) => x.playerId === a.id)!.against.length === 0, 'ninguém vota na própria resposta');
+      check(a.ans('animals', a).against.length === 0, 'ninguém vota na própria resposta');
     }
     if (round === 1 && CATS[i] === 'foods') {
-      a.socket.emit('stop:vote', { category: 'foods', playerId: b.id, valid: false });
-      await waitFor(() => a.state!.answers!.foods!.find((x) => x.playerId === b.id)!.against.length === 1);
-      check(a.state!.answers!.foods!.find((x) => x.playerId === b.id)!.valid, '1 voto contra de 2 ainda não anula');
-      c.socket.emit('stop:vote', { category: 'foods', playerId: b.id, valid: false });
-      await waitFor(() => a.state!.answers!.foods!.find((x) => x.playerId === b.id)!.valid === false);
+      a.socket.emit('stop:vote', { category: 'foods', answerId: b.ans('foods', a).id, valid: false });
+      await waitFor(() => b.ans('foods', a).against.length === 1);
+      check(b.ans('foods', a).against[0] === a.id, 'o voto não é anônimo: aparece quem votou');
+      check(b.ans('foods', a).valid, '1 voto contra de 2 ainda não anula');
+      c.socket.emit('stop:vote', { category: 'foods', answerId: b.ans('foods', a).id, valid: false });
+      await waitFor(() => b.ans('foods', a).valid === false);
       check(true, 'maioria votou contra: resposta anulada');
     }
     for (const cl of [a, b, c]) cl.socket.emit('stop:ready');
@@ -110,8 +120,7 @@ for (let round = 1; round <= 3; round++) {
   }
   await waitFor(() => a.state?.phase === 'scores' || a.state?.phase === 'ended');
   if (a.state!.phase === 'scores') {
-    const animals = a.state!.answers!.animals!;
-    const anaA = animals.find((x) => x.playerId === a.id)!;
+    const anaA = a.ans('animals');
     check(anaA.points === 5, `resposta repetida vale 5 (${anaA.text})`);
     console.log('   pontos da rodada:', a.state!.roundPoints);
     a.socket.emit('stop:next');

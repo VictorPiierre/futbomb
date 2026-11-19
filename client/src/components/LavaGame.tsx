@@ -5,6 +5,7 @@ import {
 } from '../../../shared/lava';
 import { emitAck, inviteLink, serverNow, socket, useSocketEvent } from '../net';
 import { sfx } from '../sound';
+import { pick, SWALLOWED } from '../zoeira';
 import Avatar from './Avatar';
 import { IconCopy, IconCrown, IconLink, LavaMark } from './Icons';
 
@@ -298,9 +299,9 @@ function RiseInfo({ room }: { room: LavaPublicRoom }) {
       <LavaMark className="mx-auto h-16 w-16" />
       <p className="mt-2 font-display text-3xl text-lava">A lava subiu +{room.rise}!</p>
       {gone.length > 0 ? (
-        <p className="pop-in mt-2 text-lg">🔥 {gone.join(', ')} {gone.length > 1 ? 'foram engolidos' : 'foi engolido'}!</p>
+        <p className="pop-in mt-2 text-lg">{pick(SWALLOWED, `${room.code}-${room.round}`)(gone.join(' e '), gone.length > 1)}</p>
       ) : (
-        <p className="mt-2 text-sm text-muted">Ninguém caiu… por enquanto.</p>
+        <p className="mt-2 text-sm text-muted">{pick(['Ninguém caiu… por enquanto. 😈', 'Todo mundo sobreviveu. A lava está com fome. 🍽️', 'Escaparam por pouco! 😮‍💨', 'A lava errou o bote. 🐍'], `${room.code}-${room.round}`)}</p>
       )}
       <p className="mt-3 text-xs text-muted">
         Vivos: {room.players.filter((p) => p.alive).length} de {room.players.length}

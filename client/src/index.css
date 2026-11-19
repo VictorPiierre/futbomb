@@ -257,3 +257,16 @@ body {
   0%, 100% { transform: rotate(-8deg) scale(1.05); }
   50% { transform: rotate(8deg) scale(1.12); }
 }
+
+/* Reações flutuando pela tela */
+.react-float {
+  animation: react-float 2.6s ease-out forwards;
+}
+@keyframes react-float {
+  0% { opacity: 0; transform: translate(-50%, 20px) scale(0.4); }
+  12% { opacity: 1; transform: translate(-50%, 0) scale(1.15); }
+  25% { transform: translate(-50%, -40px) scale(1) rotate(-6deg); }
+  50% { transform: translate(calc(-50% + 14px), -140px) rotate(6deg); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% - 10px), -300px) rotate(-4deg); }
+}

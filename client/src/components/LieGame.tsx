@@ -5,6 +5,7 @@ import {
 } from '../../../shared/lie';
 import { emitAck, inviteLink, serverNow, socket, useSocketEvent } from '../net';
 import { sfx } from '../sound';
+import { BEST_LIE, FELL, pick } from '../zoeira';
 import Avatar from './Avatar';
 import { IconCopy, IconCrown, IconLink, IconSend, LieMark } from './Icons';
 
@@ -230,6 +231,11 @@ function Reveal({ room, meId, isHost }: Props) {
 
   const done = shown >= reveal.length;
   const gained = room.gained ?? {};
+  // A mentira que mais enganou gente ganha um título.
+  const lies = reveal.filter((r) => !r.truth && r.authors.length > 0 && r.pickedBy.length > 0);
+  const top = Math.max(0, ...lies.map((r) => r.pickedBy.length));
+  const bestLie = top > 0 ? lies.find((r) => r.pickedBy.length === top)?.id : null;
+  const seed = `${room.code}-${room.round}`;
 
   return (
     <section className="glass rounded-3xl p-5 sm:p-7">
@@ -246,12 +252,15 @@ function Reveal({ room, meId, isHost }: Props) {
                 {r.truth ? '✅ VERDADE' : r.authors.length ? `🤥 MENTIRA de ${r.authors.map((a) => player(a)?.name ?? '?').join(' e ')}` : '🏠 mentira da casa'}
               </span>
             </div>
+            {r.id === bestLie && (
+              <p className="pop-in mt-1.5 text-xs font-bold text-spark">🏆 {pick(BEST_LIE, seed)}</p>
+            )}
             <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted">
               {r.pickedBy.length === 0 ? (
                 <span>ninguém escolheu</span>
               ) : (
                 <>
-                  <span>{r.truth ? 'acertaram:' : 'caíram:'}</span>
+                  <span>{r.truth ? 'acertaram:' : pick(FELL, `${seed}-${r.id}`)}</span>
                   {r.pickedBy.map((id) => {
                     const p = player(id);
                     return (

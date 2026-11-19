@@ -7,6 +7,7 @@ import type { QuizPublicRoom } from '../../../shared/quiz';
 import type { StopPublicRoom } from '../../../shared/stop';
 import type { PublicRoom } from '../../../shared/types';
 import { emitAck } from '../net';
+import { LAST_PLACE, pick } from '../zoeira';
 import Avatar from './Avatar';
 
 const MEDALS = ['🥇', '🥈', '🥉', '4º'];
@@ -48,6 +49,12 @@ export default function Victory({ room, meId, isHost }: { room: PublicRoom | Sto
           </div>
         ) : (
           <p className="mt-4 text-muted">Ninguém sobreviveu desta vez!</p>
+        )}
+
+        {room.kind !== 'stop' && ranking.length >= 3 && ranking[ranking.length - 1].place > 1 && (
+          <p className="pop-in mt-4 text-sm text-muted">
+            🐌 Lanterninha: <b className="text-pop-soft">{ranking[ranking.length - 1].name}</b> — {pick(LAST_PLACE, `${room.code}-${ranking[ranking.length - 1].playerId}`)}
+          </p>
         )}
 
         <ol className="mt-6 space-y-2 text-left">

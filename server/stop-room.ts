@@ -50,6 +50,8 @@ export class StopRoom {
   private reviewEndsAt: number | null = null;
   private reviewIndex = 0;
   private answers: Partial<Record<Theme, StopAnswer[]>> | null = null;
+  /** Autor de cada resposta (segredo do servidor: as respostas são anônimas). */
+  private authors = new Map<string, string>();
   private roundPoints: Record<string, number> | null = null;
   private ranking: StopPublicRoom['ranking'] = null;
   private winnerId: string | null = null;
@@ -102,6 +104,14 @@ export class StopRoom {
     this.touch();
     // Devolve as respostas que a pessoa já tinha digitado nesta rodada.
     this.io.to(socketId).emit('stop:mine', { round: this.round, answers: m.answers });
+    this.sendOwn(m);
+  }
+
+  /** Conta a cada jogador quais respostas (anônimas) são dele, para não votar em si mesmo. */
+  private sendOwn(m: Member) {
+    if (!m.socketId || !this.answers) return;
+    const ids = [...this.authors].filter(([, author]) => author === m.id).map(([id]) => id);
+    this.io.to(m.socketId).emit('stop:own', { round: this.round, ids });
   }
 
   disconnect(socketId: string) {
@@ -295,17 +305,28 @@ export class StopRoom {
   private startReview() {
     const letter = this.letter.toLowerCase();
     const answers: Partial<Record<Theme, StopAnswer[]>> = {};
+    this.authors.clear();
     for (const cat of this.settings.categories) {
-      answers[cat] = this.activePlayers().map((p) => {
+      // Ordem embaralhada em cada categoria, para a posição não entregar o autor.
+      const order = [...this.activePlayers()];
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = randomInt(i + 1);
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+      answers[cat] = order.map((p) => {
         const text = (p.answers[cat] ?? '').trim();
         const key = normalize(text);
         // Como no StopotS: quem decide são os jogadores. Tudo começa valendo,
         // exceto em branco ou com a letra errada.
         const status: StopAnswer['status'] = !key ? 'empty' : key[0] !== letter ? 'wrong-letter' : 'ok';
-        return { playerId: p.id, text, status, against: [], valid: status === 'ok' };
+        const id = randomBytes(5).toString('hex');
+        this.authors.set(id, p.id);
+        return { id, text, status, against: [], voters: 0, valid: status === 'ok' };
       });
     }
     this.answers = answers;
+    for (const list of Object.values(answers)) for (const a of list!) this.recompute(a);
+    for (const m of this.members) this.sendOwn(m);
     this.phase = 'review';
     this.reviewIndex = 0;
     this.startCategoryReview();
@@ -328,14 +349,14 @@ export class StopRoom {
   }
 
   /** valid=false: "não vale" (👎); valid=null/true: retira o voto. */
-  vote(by: string, payload: { category?: unknown; playerId?: unknown; valid?: unknown }) {
+  vote(by: string, payload: { category?: unknown; answerId?: unknown; valid?: unknown }) {
     if (this.phase !== 'review' || !this.answers) return;
     const voter = this.find(by);
     if (!voter || voter.role !== 'player' || voter.left) return;
     const cat = String(payload?.category) as Theme;
     if (cat !== this.settings.categories[this.reviewIndex]) return; // só a categoria em correção
-    const a = this.answers[cat]?.find((x) => x.playerId === payload?.playerId);
-    if (!a || a.playerId === by || a.status !== 'ok') return;
+    const a = this.answers[cat]?.find((x) => x.id === payload?.answerId);
+    if (!a || this.authors.get(a.id) === by || a.status !== 'ok') return;
     a.against = a.against.filter((id) => id !== by);
     if (payload.valid === false) a.against.push(by);
     this.recompute(a);
@@ -344,11 +365,13 @@ export class StopRoom {
 
   /** Não vale quando a maioria dos outros jogadores votou contra. */
   private recompute(a: StopAnswer) {
+    const author = this.authors.get(a.id);
+    const voters = this.activePlayers().filter((p) => p.id !== author && p.connected).length;
+    a.voters = voters;
     if (a.status !== 'ok') {
       a.valid = false;
       return;
     }
-    const voters = this.activePlayers().filter((p) => p.id !== a.playerId && p.connected).length;
     a.valid = !(voters > 0 && a.against.length > voters / 2);
   }
 
@@ -382,7 +405,10 @@ export class StopRoom {
         groups.set(key, [...(groups.get(key) ?? []), a]);
       }
       for (const g of groups.values()) for (const a of g) a.points = g.length === 1 ? 10 : 5;
-      for (const a of list!) points[a.playerId] = (points[a.playerId] ?? 0) + (a.points ?? 0);
+      for (const a of list!) {
+        const author = this.authors.get(a.id)!;
+        points[author] = (points[author] ?? 0) + (a.points ?? 0);
+      }
     }
     for (const p of this.players) p.score += points[p.id] ?? 0;
     this.roundPoints = points;

@@ -8,6 +8,7 @@ import {
 } from '../../../shared/quiz';
 import { emitAck, inviteLink, serverNow, socket, useSocketEvent } from '../net';
 import { sfx } from '../sound';
+import { pick, WILD_GUESS } from '../zoeira';
 import Avatar from './Avatar';
 import { IconCopy, IconCrown, IconLink, IconSend, QuizMark } from './Icons';
 
@@ -515,6 +516,9 @@ function QuizReveal({ room, meId, isHost }: Props) {
   if (!q || room.answer === null) return <section />;
   const visible = room.phase === 'ended' ? ordered : ordered.slice(0, shown);
   const list = [...visible].sort((x, y) => (x.place ?? 99) - (y.place ?? 99) || y.points - x.points);
+  // Chute mais absurdo (o mais longe da resposta), só quando todo mundo já apareceu.
+  const guessed = (room.results ?? []).filter((r) => r.guess !== null && r.diff !== null && r.diff! > 0);
+  const wild = !highlow && guessed.length >= 2 && visible.length === ordered.length ? guessed.reduce((w, r) => (r.diff! > w.diff! ? r : w)) : null;
 
   return (
     <section className="glass rounded-3xl p-5 sm:p-7">
@@ -546,6 +550,13 @@ function QuizReveal({ room, meId, isHost }: Props) {
         </p>
       )}
 
+      {!suspense && wild && (
+        <p className="pop-in mt-2 text-center text-sm">
+          🤡 Chute mais absurdo: <b className="text-spark">{player(wild.playerId)?.name}</b> {pick(WILD_GUESS, `${room.code}-${room.number}`)}{' '}
+          <span className="text-muted">({formatQuizNumber(wild.guess!, q.unit)})</span>
+        </p>
+      )}
+
       <ul className="mt-3 space-y-2">
         {list.map((r) => {
           const p = player(r.playerId);
@@ -562,6 +573,7 @@ function QuizReveal({ room, meId, isHost }: Props) {
                   {p?.name}
                   {r.playerId === meId && ' (você)'} {r.bet && <span title="Usou a ficha Tô certo!">🔥</span>}
                   {room.roundWorst?.includes(r.playerId) && <span className="ml-1 rounded bg-pop/20 px-1.5 text-[10px] font-bold text-pop-soft">🫏 AZARÃO</span>}
+                  {wild?.playerId === r.playerId && <span className="ml-1 rounded bg-spark/20 px-1.5 text-[10px] font-bold text-spark">🤡 ABSURDO</span>}
                 </p>
                 {r.pick && (
                   <p className={`text-[11px] ${r.pickPoints > 0 ? 'text-ok' : r.pickPoints < 0 ? 'text-danger' : 'text-muted'}`}>

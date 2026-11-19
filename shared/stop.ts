@@ -36,12 +36,15 @@ export interface StopPlayer {
 /** ok = vale até a maioria votar contra; empty/wrong-letter nunca valem. */
 export type StopAnswerStatus = 'ok' | 'empty' | 'wrong-letter';
 
+/** Resposta anônima: ninguém sabe quem escreveu (cada um recebe só os ids das próprias, pelo evento stop:own). */
 export interface StopAnswer {
-  playerId: string;
+  id: string;
   text: string;
   status: StopAnswerStatus;
-  /** Quem votou que NÃO vale. */
+  /** Quem votou que NÃO vale (os votos são públicos). */
   against: string[];
+  /** Quantos jogadores podem votar nesta resposta (todos menos o autor). */
+  voters: number;
   valid: boolean;
   /** Só existe depois da pontuação da rodada. */
   points?: number;

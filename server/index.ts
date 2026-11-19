@@ -13,6 +13,7 @@ import { EarRoom } from './ear-room.ts';
 import { LavaRoom } from './lava-room.ts';
 import { LieRoom } from './lie-room.ts';
 import { SomRoom } from './som-room.ts';
+import { REACTION_COOLDOWN_MS, REACTIONS, type Reaction } from '../shared/reactions.ts';
 import { difficultyCounts, QUIZ_TOTAL } from './quiz-bank.ts';
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -192,7 +193,7 @@ io.on('connection', (socket) => {
     const error = room ? room.stop(memberId, answers) : 'Sala não encontrada.';
     ack?.({ ok: !error, error: error ?? undefined });
   });
-  socket.on('stop:vote', (payload: { category?: string; playerId?: string; valid?: boolean | null }) => {
+  socket.on('stop:vote', (payload: { category?: string; answerId?: string; valid?: boolean | null }) => {
     const { room, memberId } = stopRoom();
     room?.vote(memberId, payload ?? {});
   });
@@ -265,6 +266,18 @@ io.on('connection', (socket) => {
   socket.on('som:next', () => {
     const { room, memberId } = current(socket);
     if (room instanceof SomRoom) room.next(memberId);
+  });
+
+  // ---------- reações (todos os jogos, menos o Stop) ----------
+  let lastReaction = 0;
+  socket.on('room:react', (emoji: string) => {
+    const { room, memberId } = current(socket);
+    if (!room || room instanceof StopRoom || !REACTIONS.includes(emoji as Reaction)) return;
+    const now = Date.now();
+    if (now - lastReaction < REACTION_COOLDOWN_MS) return;
+    lastReaction = now;
+    const m = room.members.find((x) => x.id === memberId);
+    if (m) io.to(room.code).emit('room:react', { memberId, name: m.name, emoji });
   });
 
   socket.on('disconnect', () => {

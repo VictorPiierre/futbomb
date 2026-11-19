@@ -13,6 +13,7 @@ import EarGame, { EarSettingsPanel } from './EarGame';
 import LavaGame, { LavaSettingsPanel } from './LavaGame';
 import LieGame, { LieSettingsPanel } from './LieGame';
 import SomGame, { SomSettingsPanel } from './SomGame';
+import Reactions from './Reactions';
 import { IconCopy, IconGear, IconLogout, IconMute, IconVolume, IconX, Logo } from './Icons';
 import Lobby, { SettingsPanel } from './Lobby';
 import QuizGame, { QuizSettingsPanel } from './QuizGame';
@@ -131,6 +132,7 @@ export default function RoomView({ room, meId, connected, onLeave }: Props) {
       </main>
 
       {room.phase === 'ended' && <Victory room={room} meId={meId} isHost={isHost} />}
+      {room.kind !== 'stop' && <Reactions meId={meId} />}
 
       {showSettings && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setShowSettings(false)}>

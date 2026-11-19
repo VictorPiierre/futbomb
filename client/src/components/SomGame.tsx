@@ -10,6 +10,7 @@ import {
   type ClipAudio, type Recording,
 } from '../som-audio';
 import { audioCtx, sfx } from '../sound';
+import { BEST_IMITATION, pick } from '../zoeira';
 import Avatar from './Avatar';
 import { IconCopy, IconCrown, IconLink, SomMark } from './Icons';
 
@@ -436,6 +437,7 @@ function Results({ room, meId, isHost }: Props) {
                     <p className={`truncate font-display text-lg ${r.playerId === meId ? 'text-sky' : ''}`}>
                       {p?.name ?? '?'} <span className="font-sans text-xs text-muted">· imitação #{r.slot}</span>
                     </p>
+                    {r.winner && <p className="text-xs font-bold text-spark">🏆 {pick(BEST_IMITATION, `${room.code}-${room.round}-${r.slot}`)}</p>}
                     <p className="text-sm text-muted">
                       {r.voters.length} {r.voters.length === 1 ? 'voto' : 'votos'}
                       {(gained[r.playerId] ?? 0) > 0 && <b className="ml-2 text-ok">+{gained[r.playerId]}</b>}

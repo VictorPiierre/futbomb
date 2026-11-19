@@ -397,6 +397,19 @@ function StopPlay({ room, meId }: Props) {
 
 // ---------- correção (os jogadores decidem) ----------
 
+/** Ids das minhas respostas (anônimas) na rodada. */
+let own: { round: number; ids: string[] } = { round: 0, ids: [] };
+socket.on('stop:own', (p: typeof own) => (own = p));
+
+function useOwn(round: number) {
+  const [ids, setIds] = useState(() => (own.round === round ? own.ids : []));
+  useSocketEvent<typeof own>('stop:own', (p) => p.round === round && setIds(p.ids));
+  useEffect(() => {
+    if (own.round === round) setIds(own.ids);
+  }, [round]);
+  return ids;
+}
+
 function StopReview({ room, meId }: Props) {
   const cats = room.settings.categories;
   const cat = cats[Math.min(room.reviewIndex, cats.length - 1)];
@@ -406,15 +419,15 @@ function StopReview({ room, meId }: Props) {
   const canVote = !!me && !me.left;
   const active = room.players.filter((p) => !p.left && p.connected);
   const readyCount = active.filter((p) => p.ready).length;
-  const voters = (authorId: string) => active.filter((p) => p.id !== authorId).length;
   const player = (id: string) => room.players.find((p) => p.id === id);
+  const ownIds = useOwn(room.round);
   // Respostas iguais aparecem marcadas como repetidas (valem 5).
   const counts = new Map<string, number>();
   for (const a of list) if (a.status === 'ok') counts.set(normalize(a.text), (counts.get(normalize(a.text)) ?? 0) + 1);
 
   function toggle(a: StopAnswer) {
     const against = a.against.includes(meId);
-    socket.emit('stop:vote', { category: cat, playerId: a.playerId, valid: against ? null : false });
+    socket.emit('stop:vote', { category: cat, answerId: a.id, valid: against ? null : false });
   }
 
   return (
@@ -441,26 +454,37 @@ function StopReview({ room, meId }: Props) {
       <div key={cat} className="glass slide-in rounded-3xl p-4 sm:p-5">
         <ul className="space-y-2">
           {list.map((a) => {
-            const p = player(a.playerId);
-            const mine = a.playerId === meId;
+            const mine = ownIds.includes(a.id);
             const votable = canVote && !mine && a.status === 'ok';
             const iVoted = a.against.includes(meId);
             const repeated = a.status === 'ok' && (counts.get(normalize(a.text)) ?? 0) > 1;
             return (
-              <li key={a.playerId} className={`flex items-center gap-3 rounded-2xl border-2 bg-panel-2/60 p-3 transition-colors ${a.valid ? 'border-ok/50' : 'border-danger/40 opacity-80'}`}>
-                {p && <Avatar emoji={p.avatar} id={p.id} size={38} />}
+              <li key={a.id} className={`flex items-center gap-3 rounded-2xl border-2 bg-panel-2/60 p-3 transition-colors ${a.valid ? 'border-ok/50' : 'border-danger/40 opacity-80'}`}>
+                <span className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-full bg-ink/50 text-lg" aria-hidden>{mine ? '✍️' : '❓'}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-muted">{p?.name}{mine && ' (você)'}</p>
+                  <p className="text-xs text-muted">{mine ? 'sua resposta' : 'resposta anônima'}</p>
                   <p className={`truncate text-lg font-bold ${a.valid ? '' : 'text-muted line-through'} ${a.text ? '' : 'italic'}`}>{a.text || 'em branco'}</p>
                   <p className="text-xs">
                     {a.status === 'empty' && <span className="text-muted">não respondeu</span>}
                     {a.status === 'wrong-letter' && <span className="text-danger">não começa com {room.letter}</span>}
                     {a.status === 'ok' && (
                       <span className="text-muted">
-                        👎 {a.against.length}/{voters(a.playerId)} {repeated && <span className="text-spark">· repetida</span>}
+                        👎 {a.against.length}/{a.voters} {repeated && <span className="text-spark">· repetida</span>}
                       </span>
                     )}
                   </p>
+                  {a.against.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {a.against.map((id) => {
+                        const v = player(id);
+                        return (
+                          <span key={id} className="pop-in flex items-center gap-1 rounded-full bg-danger/15 py-0.5 pr-2 pl-0.5 text-[11px] text-danger">
+                            {v && <Avatar emoji={v.avatar} id={v.id} size={16} />} {v?.name ?? '?'}{id === meId && ' (você)'}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 {votable && (
                   <button
@@ -478,7 +502,7 @@ function StopReview({ room, meId }: Props) {
           })}
         </ul>
         <p className="mt-3 text-xs text-muted">
-          Toda resposta começa valendo. Dê 👎 nas que não valem — se a maioria votar contra, ela é anulada.
+          As respostas são anônimas, mas os votos não: todo mundo vê quem deu 👎. Toda resposta começa valendo — se a maioria votar contra, ela é anulada.
         </p>
       </div>
 
@@ -498,7 +522,6 @@ function StopScores({ room, isHost }: Props) {
   const remaining = useRemaining(room.phase === 'scores' ? room.reviewEndsAt : null);
   const rows = [...room.players].sort((a, b) => b.score - a.score);
   const ended = room.phase === 'ended';
-  const answerOf = (c: Theme, id: string) => room.answers?.[c]?.find((a) => a.playerId === id);
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -521,13 +544,12 @@ function StopScores({ room, isHost }: Props) {
       </div>
 
       <div className="glass overflow-x-auto rounded-3xl">
-        <table className="w-full min-w-[640px] text-sm">
+        <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-xs text-muted uppercase">
               <th className="p-3">Jogador</th>
               <th className="p-3 text-right">Total</th>
               {room.roundPoints && <th className="p-3 text-right">Rodada</th>}
-              {room.answers && cats.map((c) => <th key={c} className="p-3 font-semibold" title={THEMES[c].label}>{THEMES[c].icon} {THEMES[c].short}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -542,23 +564,34 @@ function StopScores({ room, isHost }: Props) {
                 </td>
                 <td className="p-3 text-right font-display text-xl">{p.score}</td>
                 {room.roundPoints && <td className="p-3 text-right font-bold text-ok">+{room.roundPoints[p.id] ?? 0}</td>}
-                {room.answers &&
-                  cats.map((c) => {
-                    const a = answerOf(c, p.id);
-                    return (
-                      <td key={c} className="p-3 align-top">
-                        <span className={`block max-w-[140px] truncate ${a?.valid ? '' : 'text-muted line-through'}`}>{a?.text || '—'}</span>
-                        {a?.points !== undefined && (
-                          <span className={`text-xs font-bold ${a.points === 10 ? 'text-ok' : a.points === 5 ? 'text-spark' : 'text-muted'}`}>+{a.points}</span>
-                        )}
-                      </td>
-                    );
-                  })}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {room.answers && (
+        <div className="glass mt-4 rounded-3xl p-4">
+          <p className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">Respostas da rodada (anônimas)</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {cats.map((c) => (
+              <div key={c}>
+                <p className="mb-1.5 text-sm font-semibold">
+                  {THEMES[c].icon} {THEMES[c].label}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(room.answers?.[c] ?? [])
+                    .filter((a) => a.text)
+                    .map((a) => (
+                      <span key={a.id} className={`rounded-full border px-2.5 py-0.5 text-xs ${a.valid ? (a.points === 5 ? 'border-spark/40 text-spark' : 'border-ok/40 text-ok') : 'border-line text-muted line-through'}`}>
+                        {a.text} {a.points !== undefined && <b>+{a.points}</b>}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <p className="mt-2 text-xs text-muted">Resposta única = 10 · repetida = 5 · inválida ou em branco = 0</p>
     </div>
   );

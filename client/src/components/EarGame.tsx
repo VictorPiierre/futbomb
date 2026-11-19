@@ -6,6 +6,7 @@ import {
 } from '../../../shared/ear';
 import { emitAck, inviteLink, serverNow, socket, useSocketEvent } from '../net';
 import { audioCtx, sfx } from '../sound';
+import { DEAF, pick } from '../zoeira';
 import Avatar from './Avatar';
 import { EarMark, IconCopy, IconCrown, IconLink, IconSend } from './Icons';
 
@@ -454,6 +455,10 @@ function EarReveal({ room, meId, isHost }: Props) {
   if (!w || !room.lang) return <section />;
   const lang = EAR_LANGS[room.lang];
   const written = w.answers[0];
+  // A resposta mais longe da palavra ganha um troféu de zoeira (com 2+ respostas e menos de 60% parecida).
+  const answered = (room.results ?? []).filter((r) => r.answer !== null);
+  const worst = answered.length >= 2 ? answered.reduce((a, b) => (b.similarity < a.similarity ? b : a)) : null;
+  const deaf = worst && worst.similarity < 60 ? worst.playerId : null;
   const showWritten = earNorm(written) !== earNorm(w.say) || /[^\u0000-ɏ\s'’-]/.test(w.say);
 
   return (
@@ -486,6 +491,7 @@ function EarReveal({ room, meId, isHost }: Props) {
                   {r.playerId === meId && ' (você)'}
                   {r.exact && <span className="ml-1.5 text-xs text-spark">🎯 perfeito!</span>}
                   {r.best && !r.exact && <span className="ml-1.5 text-xs text-spark">⭐ mais perto</span>}
+                  {deaf === r.playerId && <span className="ml-1.5 rounded bg-pop/20 px-1.5 text-[10px] font-bold text-pop-soft">🦻 {pick(DEAF, `${room.code}-${room.round}`)}</span>}
                 </p>
                 <p className="text-xs break-all text-muted">
                   {r.answer === null ? 'não respondeu' : <Letters guess={r.answer} answers={w.answers} />}
