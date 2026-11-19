@@ -614,6 +614,7 @@ function SomLobby({ room, meId, isHost, onCopy }: Props) {
   const ready = room.players.filter((p) => p.connected).length;
   const amSpectator = room.spectators.some((s) => s.id === meId);
   const seatFree = room.players.length < room.settings.maxPlayers;
+  const empty = Object.values(room.library).every((n) => !n);
 
   async function start() {
     const res = await emitAck<{ ok: boolean; error?: string }>('game:start');
@@ -652,6 +653,12 @@ function SomLobby({ room, meId, isHost, onCopy }: Props) {
           </button>
         )}
 
+        {empty && (
+          <div className="mt-6 rounded-2xl border-2 border-dashed border-spark/50 bg-spark/10 p-4 text-sm">
+            <p className="font-semibold text-spark">🔇 Ainda não tem nenhum som no jogo</p>
+            <p className="mt-1 text-muted">O dono do site precisa adicionar os sons antes da primeira partida. Assim que adicionar, eles aparecem aqui.</p>
+          </div>
+        )}
         <MicTest />
 
         <div className="mt-6 rounded-2xl border border-pop/30 bg-pop/10 p-4">
@@ -681,10 +688,10 @@ function SomLobby({ room, meId, isHost, onCopy }: Props) {
         <div className="mt-auto pt-6">
           {isHost ? (
             <>
-              <button onClick={start} disabled={ready < 2} className="btn-primary w-full py-4 text-xl">
+              <button onClick={start} disabled={ready < 2 || empty} className="btn-primary w-full py-4 text-xl">
                 Começar o Faz Esse Som!
               </button>
-              {ready < 2 && <p className="mt-2 text-center text-xs text-muted">Precisa de pelo menos 2 jogadores conectados.</p>}
+              {ready < 2 && !empty && <p className="mt-2 text-center text-xs text-muted">Precisa de pelo menos 2 jogadores conectados.</p>}
             </>
           ) : (
             <div className="rounded-xl bg-panel-2 py-4 text-center text-sm text-muted">Aguardando {room.hostName} começar…</div>
@@ -696,13 +703,10 @@ function SomLobby({ room, meId, isHost, onCopy }: Props) {
   );
 }
 
-/** Temas com pelo menos um som, na ordem da biblioteca, com a quantidade. */
-const THEMES = (Object.keys(SOM_CATEGORIES) as SomCategory[])
-  .map((c) => [c, SOM_LIBRARY.filter((x) => x.cat === c).length] as const)
-  .filter(([, n]) => n > 0);
-
 export function SomSettingsPanel({ room, editable }: { room: SomPublicRoom; editable: boolean }) {
   const s = room.settings;
+  // Temas com pelo menos um som (contagem ao vivo do servidor).
+  const THEMES = (Object.keys(SOM_CATEGORIES) as SomCategory[]).map((c) => [c, room.library[c] ?? 0] as const).filter(([, n]) => n > 0);
   const set = (patch: Partial<SomSettings>) => editable && socket.emit('room:settings', patch);
   const chip = (on: boolean) => `chip ${on ? 'chip-on' : editable ? '' : 'opacity-60'}`;
   return (

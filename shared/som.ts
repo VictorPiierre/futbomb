@@ -87,6 +87,8 @@ export interface SomPublicRoom {
   endsAt: number | null;
   /** Votação: quantas imitações existem (as gravações chegam pelo evento som:clips). */
   clipCount: number;
+  /** Quantos sons existem agora no jogo, por tema (inclui os salvos há pouco pelo /admin). */
+  library: Partial<Record<SomCategory, number>>;
   /** Quando começa a sequência original + imitações na votação. */
   playlistAt: number | null;
   results: SomResult[] | null;

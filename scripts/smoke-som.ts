@@ -1,6 +1,6 @@
 /**
  * Teste de ponta a ponta do "Faz Esse Som!" com 3 clientes.
- * Uso: com o servidor rodando (de preferência com SOM_PACE=0.1) -> npm run smoke:som
+ * Uso: com o servidor rodando com SOM_TEST_SOUNDS=1 (sons de mentira) e, de preferência, SOM_PACE=0.1 -> npm run smoke:som
  */
 import fs from 'node:fs';
 import { io, type Socket } from 'socket.io-client';
@@ -23,15 +23,11 @@ async function waitFor(fn: () => boolean, ms = 30_000) {
   }
 }
 
-// Biblioteca: ids únicos e todo som tem arquivo.
-check(SOM_LIBRARY.length >= 40, `biblioteca com ${SOM_LIBRARY.length} sons`);
-check(new Set(SOM_LIBRARY.map((s) => s.id)).size === SOM_LIBRARY.length, 'ids sem repetição');
-const missing = SOM_LIBRARY.filter((s) => !fs.existsSync(`client/public/som/${s.id}.mp3`));
-check(!missing.length, `todo som tem arquivo ${missing.map((s) => s.id).join(', ')}`);
-check(SOM_LIBRARY.every((s) => s.cat in SOM_CATEGORIES && s.diff in SOM_DIFFICULTIES), 'todo som tem categoria e dificuldade válidas');
-const hard = SOM_LIBRARY.filter((s) => s.diff !== 'facil').length;
-check(hard / SOM_LIBRARY.length >= 0.6, `a biblioteca prioriza difícil/impossível (${hard} de ${SOM_LIBRARY.length})`);
-check(SOM_LIBRARY.filter((s) => s.cat === 'phonk').every((s) => s.diff === 'impossivel'), 'phonk é sempre impossível');
+// Biblioteca (os sons do dono, salvos pelo /admin): ids únicos, arquivo existe, tema e dificuldade válidos.
+check(new Set(SOM_LIBRARY.map((x) => x.id)).size === SOM_LIBRARY.length, `ids sem repetição (${SOM_LIBRARY.length} sons do dono)`);
+const missing = SOM_LIBRARY.filter((x) => !fs.existsSync(`client/public/som/${x.file ?? `${x.id}.mp3`}`));
+check(!missing.length, `todo som tem arquivo ${missing.map((x) => x.id).join(', ')}`);
+check(SOM_LIBRARY.every((x) => x.cat in SOM_CATEGORIES && x.diff in SOM_DIFFICULTIES), 'todo som tem tema e dificuldade válidos');
 
 class Client {
   socket: Socket;
@@ -68,8 +64,9 @@ for (let round = 1; round <= 3; round++) {
   await waitFor(() => a.state?.phase === 'record' && a.state.round === round);
   const s = a.state!;
   seen.add(s.sound!.id);
-  check(!!s.sound && !!s.playAt && SOM_LIBRARY.some((x) => x.id === s.sound!.id), `rodada ${round}: som "${s.sound!.title}"`);
-  check(s.sound!.cat === 'meme' && s.sound!.diff === 'impossivel', `tema e dificuldade respeitados (${s.sound!.cat}, ${s.sound!.diff})`);
+  check(!!s.sound && !!s.playAt, `rodada ${round}: som "${s.sound!.title}"`);
+  // Só há 1 som de teste por dificuldade: depois do primeiro, cai para outra dificuldade do mesmo tema.
+  check(s.sound!.cat === 'meme' && (round > 1 || s.sound!.diff === 'impossivel'), `tema e dificuldade respeitados (${s.sound!.cat}, ${s.sound!.diff})`);
 
   if (round === 3) {
     // Ninguém grava: vai direto para o resultado vazio.

@@ -5,7 +5,7 @@ import {
   SOM_VOTE_EXTRA_MS, SOM_VOTE_POINTS, SOM_WIN_POINTS,
   type SomClip, type SomPhase, type SomPublicRoom, type SomResult, type SomSettings, type SomSound,
 } from '../shared/som.ts';
-import { SOM_DIFFICULTIES, SOM_LIBRARY, type SomDifficulty } from '../shared/som-library.ts';
+import { SOM_DIFFICULTIES, SOM_LIBRARY, type SomCategory, type SomDifficulty } from '../shared/som-library.ts';
 import { SOM_DIFF_WEIGHTS } from '../shared/som.ts';
 
 const MAX_MEMBERS = 16;
@@ -14,6 +14,12 @@ const GRACE_GAME_MS = 60_000;
 const ALL_IN_DELAY_MS = 800;
 /** Testes automáticos aceleram a partida (ex.: SOM_PACE=0.1). */
 const PACE = Number(process.env.SOM_PACE) || 1;
+// Testes automáticos: sons de mentira para dar para jogar sem nenhum som cadastrado (ex.: SOM_TEST_SOUNDS=1).
+if (process.env.SOM_TEST_SOUNDS && !SOM_LIBRARY.length) {
+  const cats = ['meme', 'phonk', 'bicho', 'efeito'] as const;
+  const diffs = ['facil', 'dificil', 'impossivel'] as const;
+  cats.forEach((cat) => diffs.forEach((diff) => SOM_LIBRARY.push({ id: `teste-${cat}-${diff}`, title: `Teste ${cat} ${diff}`, emoji: '🧪', cat, diff, file: 'teste.wav' })));
+}
 const ms = (n: number) => Math.round(n * PACE);
 
 interface Member {
@@ -183,6 +189,7 @@ export class SomRoom {
     if (this.phase === 'ended') this.resetToLobby();
     for (const m of this.players) if (!m.connected) m.role = 'spectator';
     if (this.players.length < 2) return 'São necessários pelo menos 2 jogadores conectados.';
+    if (!SOM_LIBRARY.length) return 'Ainda não tem nenhum som no jogo. O dono do site precisa adicionar os sons primeiro.';
     for (const p of this.players) {
       p.score = 0;
       p.left = false;
@@ -456,6 +463,7 @@ export class SomRoom {
       playAt: this.phase === 'record' ? this.playAt : null,
       endsAt: this.endsAt,
       clipCount: this.slots.length,
+      library: SOM_LIBRARY.reduce<Partial<Record<SomCategory, number>>>((acc, s) => ({ ...acc, [s.cat]: (acc[s.cat] ?? 0) + 1 }), {}),
       playlistAt: this.phase === 'vote' ? this.playlistAt : null,
       results: this.phase === 'results' ? this.results : null,
       gained: this.phase === 'results' ? this.gained : null,

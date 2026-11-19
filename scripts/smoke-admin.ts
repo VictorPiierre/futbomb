@@ -2,6 +2,8 @@
  * Teste do salvamento pelo /admin com um GitHub de mentira (nada é enviado para o GitHub de verdade).
  * Uso: npx tsx scripts/smoke-admin.ts
  */
+export {};
+
 process.env.SOM_ADMIN_KEY = 'senha-de-teste';
 process.env.GITHUB_TOKEN = 'token-de-teste';
 
