@@ -51,7 +51,7 @@ b.id = (await b.emit<JoinResult>('room:join', { code: r.code, name: 'Beto' })).m
 c.id = (await c.emit<JoinResult>('room:join', { code: r.code, name: 'Caio' })).memberId!;
 await waitFor(() => a.state?.players.length === 3);
 check(a.state?.kind === 'som', 'sala do Faz Esse Som! criada com 3 jogadores');
-check(a.state!.soundCount === 6 && !('theme' in a.state!.settings), 'sem temas nem dificuldades: uma lista só (6 sons de teste)');
+check(a.state!.soundCount === (SOM_LIBRARY.length || 6) && !('theme' in a.state!.settings), `sem temas nem dificuldades: uma lista só (${a.state!.soundCount} sons)`);
 a.socket.emit('room:settings', { rounds: 3 });
 await waitFor(() => a.state?.settings.rounds === 3);
 
