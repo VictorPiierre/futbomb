@@ -65,8 +65,14 @@ for (let round = 1; round <= 3; round++) {
   check(!('cat' in s.sound!) && !('diff' in s.sound!), 'o som não tem tema nem dificuldade');
 
   if (round === 3) {
-    // Ninguém grava: vai direto para o resultado vazio.
-    await waitFor(() => a.state?.phase === 'results', 30_000);
+    // Ninguém grava: sem tempo, a gravação não acaba sozinha; o dono encerra.
+    await sleep(1500);
+    check(a.state!.phase === 'record' && a.state!.endsAt === null, 'sem tempo para gravar: a rodada não acaba sozinha');
+    b.socket.emit('som:next');
+    await sleep(300);
+    check(a.state!.phase === 'record', 'só o dono encerra a gravação');
+    a.socket.emit('som:next');
+    await waitFor(() => a.state?.phase === 'results', 5000);
     check(a.state!.results!.length === 0, 'rodada sem gravações: resultado vazio, sem votação');
     a.socket.emit('som:next');
     break;
@@ -76,8 +82,10 @@ for (let round = 1; round <= 3; round++) {
   check(!early.ok, 'gravação inválida é recusada');
   await waitFor(() => (a.state?.playAt ?? 0) < Date.now() + 50);
   await a.emit('som:clip', fakeClip('A'), 'audio/webm;codecs=opus');
+  await sleep(200);
+  check(a.state!.phase === 'record' && a.state!.players.find((p) => p.id === a.id)!.done, 'Ana apertou Pronto e aparece como pronta; os outros ainda não');
   await b.emit('som:clip', fakeClip('B'), 'audio/mp4');
-  await c.emit('som:clip', fakeClip('C'), 'audio/webm');
+  await c.emit('som:clip', fakeClip('C'), 'audio/wav');
   await waitFor(() => a.state?.phase === 'vote', 5000);
   await waitFor(() => a.clips?.round === round && b.clips?.round === round && c.clips?.round === round, 5000);
   const order = a.state!.order;

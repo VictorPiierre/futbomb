@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  SOM_MAX_PLAYERS, SOM_MAX_REC_MS, SOM_RATING_ORDER, SOM_RATINGS, SOM_RECORD_TIMES, SOM_ROUNDS, type SomRating,
+  SOM_MAX_PLAYERS, SOM_MAX_REC_MS, SOM_RATING_ORDER, SOM_RATINGS, SOM_ROUNDS, type SomRating,
   type SomClip, type SomPublicRoom, type SomSettings,
 } from '../../../shared/som';
 import { emitAck, inviteLink, serverNow, socket, useSocketEvent } from '../net';
 import {
   getMic, loadSound, micSupported, playAudio, prepareClip, startRecording, stopPlayback, useNowPlaying,
-  type ClipAudio, type MicEffect, type Recording,
+  applyModifiers, decodeBlob, SOM_MODIFIERS, type ClipAudio, type Recording, type SomModifier,
 } from '../som-audio';
 import { audioCtx, sfx } from '../sound';
 import { BEST_IMITATION, pick } from '../zoeira';
@@ -126,13 +126,6 @@ export default function SomGame(props: Props) {
   );
 }
 
-/** Efeitos de microfone (a gravação enviada já vai com o efeito). */
-const EFFECTS: { id: MicEffect; label: string }[] = [
-  { id: 'none', label: 'Normal' },
-  { id: 'karaoke', label: '🎤 Karaokê' },
-  { id: 'blown', label: '💥 Estourado' },
-];
-
 function RoundHeader({ room }: { room: SomPublicRoom }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -167,7 +160,7 @@ function SoundCard({ room, disabled }: { room: SomPublicRoom; disabled?: boolean
 
 // ---------- ouvir e gravar ----------
 
-function Record({ room, meId }: Props) {
+function Record({ room, meId, isHost }: Props) {
   const me = room.players.find((p) => p.id === meId);
   const playing = !!me && !me.left;
   const now = useNow();
@@ -187,45 +180,74 @@ function Record({ room, meId }: Props) {
   const [recStart, setRecStart] = useState(0);
   const [level, setLevel] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(() => mine.round === room.round && mine.recorded);
-  const [take, setTake] = useState<ClipAudio | null>(null);
+  /** Última gravação (ainda não enviada). */
+  const [raw, setRaw] = useState<{ blob: Blob; mime: string; buffer: AudioBuffer | null } | null>(null);
+  const [mods, setMods] = useState<SomModifier[]>([]);
+  const [ready, setReady] = useState(() => mine.round === room.round && mine.recorded);
+  const [sentAudio, setSentAudio] = useState<ClipAudio | null>(null);
   const [error, setError] = useState('');
-  const effects = EFFECTS;
-  const [effect, setEffect] = useState<MicEffect>('none');
-  useSocketEvent<Mine>('som:mine', (p) => p.round === room.round && setSent(p.recorded));
+  useSocketEvent<Mine>('som:mine', (p) => p.round === room.round && p.recorded && setReady(true));
   const recording = !!rec;
   const elapsed = recording ? Math.min(SOM_MAX_REC_MS, Date.now() - recStart) : 0;
   useEffect(() => () => rec?.stop(), [rec]);
+  const active = room.players.filter((p) => !p.left && p.connected);
+  const readyCount = active.filter((p) => p.done).length;
 
   async function toggle() {
     if (rec) return rec.stop();
     setError('');
     if (!micSupported()) return setError('Seu navegador não permite gravar áudio. Tente o Chrome ou o Safari atualizados.');
     try {
-      const r = await startRecording(SOM_MAX_REC_MS, setLevel, effect);
+      const r = await startRecording(SOM_MAX_REC_MS, setLevel);
       setRec(r);
       setRecStart(Date.now());
       const { blob, mime } = await r.done;
       setRec(null);
-      setBusy(true);
-      const data = await blob.arrayBuffer();
-      const res = await emitAck<{ ok: boolean; error?: string }>('som:clip', data, mime);
-      setBusy(false);
-      if (!res.ok) {
-        setError(res.error ?? 'Não deu para enviar a gravação.');
-        return sfx.wrong();
+      let buffer: AudioBuffer | null = null;
+      try {
+        buffer = await decodeBlob(blob);
+      } catch {
+        buffer = null; // sem modificadores neste navegador: vai a gravação original
       }
-      setSent(true);
+      setRaw({ blob, mime, buffer });
       sfx.myTurn();
-      if (take) URL.revokeObjectURL(take.url);
-      setTake(await prepareClip(data, mime));
     } catch (e) {
       setRec(null);
-      setBusy(false);
       const denied = e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
       setError(denied ? '🎙️ O microfone foi bloqueado. Libere o acesso ao microfone nas permissões do navegador e tente de novo.' : 'Não consegui acessar o microfone.');
     }
   }
+
+  /** Gravação com os modificadores marcados (o que vai ser enviado). */
+  async function rendered(): Promise<{ data: ArrayBuffer; mime: string }> {
+    if (raw?.buffer) return { data: await applyModifiers(raw.buffer, mods), mime: 'audio/wav' };
+    return { data: await raw!.blob.arrayBuffer(), mime: raw!.mime };
+  }
+
+  async function preview() {
+    if (!raw) return;
+    const { data, mime: type } = await rendered();
+    playAudio('take', await prepareClip(data, type));
+  }
+
+  async function done() {
+    if (!raw) return;
+    setBusy(true);
+    setError('');
+    const { data, mime: type } = await rendered();
+    const res = await emitAck<{ ok: boolean; error?: string }>('som:clip', data, type);
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.error ?? 'Não deu para enviar a gravação.');
+      return sfx.wrong();
+    }
+    sfx.correct();
+    stopPlayback();
+    setSentAudio(await prepareClip(data, type));
+    setReady(true);
+  }
+
+  const toggleMod = (m: SomModifier) => setMods((list) => (list.includes(m) ? list.filter((x) => x !== m) : [...list, m]));
 
   return (
     <section className="glass rounded-3xl p-5 sm:p-7">
@@ -244,31 +266,33 @@ function Record({ room, meId }: Props) {
       ) : (
         <>
           <SoundCard room={room} disabled={recording} />
-          <Timer endsAt={room.endsAt} total={room.settings.recordTime * 1000} />
-          {playing ? (
+          <p className="mt-3 text-center text-xs text-muted">
+            ✅ {readyCount} de {active.length} {readyCount === 1 ? 'pronto' : 'prontos'} — sem pressa, a rodada segue quando todo mundo apertar <b className="text-white">Pronto</b>.
+          </p>
+
+          {!playing ? (
+            <p className="mt-4 rounded-xl bg-panel-2 p-3 text-center text-sm text-muted">Você está assistindo esta partida.</p>
+          ) : ready ? (
+            <div className="pop-in mt-5 rounded-2xl border-2 border-ok/50 bg-ok/10 p-5 text-center">
+              <p className="text-5xl">✅</p>
+              <p className="mt-1 font-display text-2xl">Pronto!</p>
+              <p className="text-sm text-muted">Esperando os outros terminarem…</p>
+              {sentAudio && (
+                <button onClick={() => playAudio('take', sentAudio)} className="btn-secondary mt-3 px-4 text-sm">
+                  ▶ Ouvir o que eu enviei
+                </button>
+              )}
+            </div>
+          ) : (
             <div className="mt-4 flex flex-col items-center text-center">
               <p className="mb-4 text-sm text-muted">
-                {recording ? 'Gravando… capriche! 😂' : sent ? 'Imitação enviada! Se quiser, grave de novo — vale a última.' : `Agora imite o som! Você tem até ${SOM_MAX_REC_MS / 1000}s de gravação.`}
+                {recording ? 'Gravando… capriche! 😂 Toque para parar.' : raw ? 'Ouça, escolha os modificadores (se quiser) e aperte Pronto.' : 'Agora imite o som! Toque no microfone para gravar.'}
               </p>
-              {effects.length > 0 && (
-                <div className="mb-4 flex flex-wrap justify-center gap-1.5" role="group" aria-label="Efeito do microfone">
-                  {effects.map((e) => (
-                    <button
-                      key={e.id}
-                      disabled={recording || busy}
-                      onClick={() => setEffect(e.id)}
-                      className={`chip px-3 py-1.5 text-sm ${effect === e.id ? 'chip-on' : ''}`}
-                    >
-                      {e.label}
-                    </button>
-                  ))}
-                </div>
-              )}
               <button
                 onClick={toggle}
                 disabled={busy}
-                aria-label={recording ? 'Parar gravação' : 'Gravar'}
-                className={`relative grid h-32 w-32 cursor-pointer place-items-center rounded-full border-4 text-5xl transition disabled:opacity-60 ${
+                aria-label={recording ? 'Parar gravação' : raw ? 'Gravar de novo' : 'Gravar'}
+                className={`relative grid cursor-pointer place-items-center rounded-full border-4 transition disabled:opacity-60 ${raw && !recording ? 'h-20 w-20 text-3xl' : 'h-32 w-32 text-5xl'} ${
                   recording ? 'border-danger bg-danger/20' : 'border-sky bg-sky/15 hover:bg-sky/25'
                 }`}
                 style={{ transform: `scale(${1 + level * 0.18})` }}
@@ -280,16 +304,46 @@ function Record({ room, meId }: Props) {
                 )}
                 <span className={recording ? 'animate-pulse' : ''}>{recording ? '⏹️' : '🎙️'}</span>
               </button>
-              <p className="mt-3 font-display text-lg">{busy ? 'Enviando…' : recording ? 'Toque para parar' : sent ? 'Gravar de novo' : 'Toque para gravar'}</p>
-              {sent && take && !recording && (
-                <button onClick={() => playAudio('take', take)} className="pop-in mt-3 rounded-full border border-ok/40 bg-ok/10 px-4 py-1.5 text-sm font-semibold text-ok">
-                  ▶ Ouvir minha imitação
-                </button>
+              <p className="mt-2 font-display text-lg">
+                {recording ? `${(elapsed / 1000).toFixed(1)}s` : raw ? 'Gravar de novo' : 'Toque para gravar'}
+              </p>
+
+              {raw && !recording && (
+                <div className="pop-in mt-4 w-full rounded-2xl bg-ink/40 p-4">
+                  <button onClick={() => void preview()} className="btn-secondary w-full py-2.5">
+                    ▶ Ouvir minha imitação{mods.length ? ' (com modificadores)' : ''}
+                  </button>
+                  <p className="mt-4 mb-2 text-xs font-semibold tracking-wider text-muted uppercase">Modificadores (opcional — pode marcar vários)</p>
+                  {raw.buffer ? (
+                    <div className="flex flex-wrap justify-center gap-1.5">
+                      {SOM_MODIFIERS.map((m) => (
+                        <button key={m.id} onClick={() => toggleMod(m.id)} className={`chip px-3 py-1.5 text-sm ${mods.includes(m.id) ? 'chip-on' : ''}`} aria-pressed={mods.includes(m.id)}>
+                          {m.emoji} {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted">Este navegador não deixa aplicar modificadores — vai a gravação normal.</p>
+                  )}
+                  <button onClick={() => void done()} disabled={busy} className="btn-primary mt-5 w-full py-3.5 text-xl">
+                    {busy ? 'Enviando…' : '✅ Pronto!'}
+                  </button>
+                </div>
               )}
               {error && <p className="slide-in mt-3 text-sm text-danger">{error}</p>}
             </div>
-          ) : (
-            <p className="mt-4 rounded-xl bg-panel-2 p-3 text-center text-sm text-muted">Você está assistindo esta partida.</p>
+          )}
+
+          {isHost && (
+            <button
+              onClick={() => {
+                if (readyCount < active.length && !window.confirm(`Ainda faltam ${active.length - readyCount} pessoa(s) apertar Pronto. Encerrar a gravação mesmo assim?`)) return;
+                socket.emit('som:next');
+              }}
+              className="mt-5 w-full cursor-pointer py-2 text-sm text-muted hover:text-white"
+            >
+              ⏭️ Encerrar a gravação e ir para o desfile
+            </button>
           )}
         </>
       )}
@@ -731,7 +785,7 @@ function SomLobby({ room, meId, isHost, onCopy }: Props) {
         <div className="mt-6 rounded-2xl bg-panel/60 p-4 text-sm text-muted">
           <p className="mb-1 font-semibold text-white">Como funciona</p>
           Toca um som curtinho e absurdo — grito estourado, pum bass boosted, drop de phonk, bicho, efeito de videogame… Todo mundo tenta <b className="text-sky">imitar no microfone</b>{' '}
-          (dá para ouvir de novo antes de gravar). Depois vem o desfile: aparece a foto e o nome de cada um, toca a imitação e todo mundo vota <b className="text-white">😬 Ruim</b> (+0),{' '}
+          (dá para ouvir de novo, gravar quantas vezes quiser e colocar modificadores como 💥 estourado, 🎤 microfone de show e 🐿️ esquilo). Sem tempo: segue quando todos apertam Pronto. Depois vem o desfile: aparece a foto e o nome de cada um, toca a imitação e todo mundo vota <b className="text-white">😬 Ruim</b> (+0),{' '}
           <b className="text-white">😐 Meh</b> (+1) ou <b className="text-white">🔥 Bom</b> (+2) — não vale votar em si mesmo. Dá para baixar o áudio de qualquer um. Quem passa para o próximo é o dono da sala.
         </div>
       </section>
@@ -771,13 +825,6 @@ export function SomSettingsPanel({ room, editable }: { room: SomPublicRoom; edit
         {SOM_ROUNDS.map((n) => (
           <button key={n} disabled={!editable} onClick={() => set({ rounds: n })} className={`${chip(s.rounds === n)} flex-1`}>
             {n}
-          </button>
-        ))}
-      </Row>
-      <Row label="Tempo para ouvir e gravar">
-        {SOM_RECORD_TIMES.map((t) => (
-          <button key={t} disabled={!editable} onClick={() => set({ recordTime: t })} className={`${chip(s.recordTime === t)} flex-1`}>
-            {t}s
           </button>
         ))}
       </Row>

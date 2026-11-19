@@ -173,105 +173,12 @@ export interface Recording {
   done: Promise<{ blob: Blob; mime: string }>;
 }
 
-/** Efeito aplicado no microfone (a gravação enviada já vai com ele). */
-export type MicEffect = 'none' | 'karaoke' | 'blown';
-
-/** Resposta de impulso de uma "sala" para o reverb (ruído decaindo). */
-function impulse(ctx: AudioContext, seconds: number) {
-  const len = Math.round(ctx.sampleRate * seconds);
-  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
-  for (let c = 0; c < 2; c++) {
-    const d = buf.getChannelData(c);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2.5;
-  }
-  return buf;
-}
-
-function limiter(ctx: AudioContext, threshold: number) {
-  const l = ctx.createDynamicsCompressor();
-  l.threshold.value = threshold;
-  l.knee.value = 0;
-  l.ratio.value = 20;
-  l.attack.value = 0.002;
-  l.release.value = 0.1;
-  return l;
-}
-
-/**
- * Monta a cadeia do efeito: entrada -> efeito -> saída (que vai para o gravador).
- * - karaoke: compressão + reverb + delay leve (estilo show).
- * - blown: "microfone estourado" (saturação pesada e grave), com o volume segurado por um limitador.
- */
-function effectChain(ctx: AudioContext, input: AudioNode, effect: MicEffect, out: AudioNode) {
-  if (effect === 'karaoke') {
-    const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -24;
-    comp.ratio.value = 4;
-    comp.attack.value = 0.005;
-    comp.release.value = 0.2;
-    const sum = ctx.createGain();
-    const dry = ctx.createGain();
-    dry.gain.value = 0.85;
-    const reverb = ctx.createConvolver();
-    reverb.buffer = impulse(ctx, 1.8);
-    const wet = ctx.createGain();
-    wet.gain.value = 0.45;
-    const delay = ctx.createDelay(1);
-    delay.delayTime.value = 0.23;
-    const feedback = ctx.createGain();
-    feedback.gain.value = 0.28;
-    const delayWet = ctx.createGain();
-    delayWet.gain.value = 0.22;
-    input.connect(comp);
-    comp.connect(dry).connect(sum);
-    comp.connect(reverb).connect(wet).connect(sum);
-    comp.connect(delay).connect(delayWet).connect(sum);
-    delay.connect(feedback).connect(delay);
-    sum.connect(limiter(ctx, -3)).connect(out);
-    return;
-  }
-  if (effect === 'blown') {
-    const pre = ctx.createGain();
-    pre.gain.value = 12;
-    const shaper = ctx.createWaveShaper();
-    const curve = new Float32Array(1024);
-    for (let i = 0; i < curve.length; i++) {
-      const x = (i / (curve.length - 1)) * 2 - 1;
-      curve[i] = Math.tanh(x * 6) * 0.9 + Math.sign(x) * 0.1 * Math.min(1, Math.abs(x) * 8);
-    }
-    shaper.curve = curve;
-    shaper.oversample = '4x';
-    const bass = ctx.createBiquadFilter();
-    bass.type = 'lowshelf';
-    bass.frequency.value = 160;
-    bass.gain.value = 9;
-    const lowpass = ctx.createBiquadFilter();
-    lowpass.type = 'lowpass';
-    lowpass.frequency.value = 5500;
-    const post = ctx.createGain();
-    post.gain.value = 0.22;
-    input.connect(pre).connect(shaper).connect(bass).connect(lowpass).connect(post).connect(limiter(ctx, -8)).connect(out);
-    return;
-  }
-  input.connect(out);
-}
-
-/** Grava até `maxMs` (com o efeito escolhido), avisando o volume (0–1) para animar o medidor. */
-export async function startRecording(maxMs: number, onLevel: (level: number) => void, effect: MicEffect = 'none'): Promise<Recording> {
+/** Grava até `maxMs` (ou até parar), avisando o volume (0–1) para animar o medidor. */
+export async function startRecording(maxMs: number, onLevel: (level: number) => void): Promise<Recording> {
   const mic = await getMic();
   stopPlayback();
   const mime = pickMime();
-  const ctx0 = audioCtx();
-  // Com efeito, o gravador recebe o áudio já processado pelo Web Audio.
-  let recStream: MediaStream = mic;
-  let fxSource: MediaStreamAudioSourceNode | null = null;
-  if (effect !== 'none' && ctx0 && 'createMediaStreamDestination' in ctx0) {
-    fxSource = ctx0.createMediaStreamSource(mic);
-    const dest = ctx0.createMediaStreamDestination();
-    effectChain(ctx0, fxSource, effect, dest);
-    recStream = dest.stream;
-  }
-  const rec = new MediaRecorder(recStream, mime ? { mimeType: mime, audioBitsPerSecond: 64_000 } : undefined);
+  const rec = new MediaRecorder(mic, mime ? { mimeType: mime, audioBitsPerSecond: 64_000 } : undefined);
   const chunks: Blob[] = [];
   rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
 
@@ -299,28 +206,184 @@ export async function startRecording(maxMs: number, onLevel: (level: number) => 
     rec.onstop = () => {
       cancelAnimationFrame(raf);
       source?.disconnect();
-      // O reverb/delay ainda soa um pouquinho depois de parar; solta a cadeia em seguida.
-      setTimeout(() => fxSource?.disconnect(), 100);
       onLevel(0);
       const type = rec.mimeType || mime || 'audio/webm';
       resolve({ blob: new Blob(chunks, { type }), mime: type });
     };
   });
   rec.start();
-  // No karaokê, grava mais um pouquinho para não cortar o eco no meio.
-  const tail = effect === 'karaoke' ? 400 : 0;
-  const finish = () => window.setTimeout(() => rec.state === 'recording' && rec.stop(), tail);
-  const timer = window.setTimeout(finish, maxMs);
-  let stopped = false;
+  const timer = window.setTimeout(() => rec.state === 'recording' && rec.stop(), maxMs);
   return {
     stop: () => {
-      if (stopped) return;
-      stopped = true;
       clearTimeout(timer);
-      finish();
+      if (rec.state === 'recording') rec.stop();
     },
     done,
   };
+}
+
+// ---------- modificadores (aplicados na gravação depois de gravar) ----------
+
+export type SomModifier = 'estourado' | 'show' | 'esquilo' | 'monstro' | 'robo' | 'telefone' | 'eco';
+
+export const SOM_MODIFIERS: { id: SomModifier; emoji: string; label: string }[] = [
+  { id: 'estourado', emoji: '💥', label: 'Estourado' },
+  { id: 'show', emoji: '🎤', label: 'Microfone de show' },
+  { id: 'esquilo', emoji: '🐿️', label: 'Esquilo' },
+  { id: 'monstro', emoji: '👹', label: 'Monstro' },
+  { id: 'robo', emoji: '🤖', label: 'Robô' },
+  { id: 'telefone', emoji: '📞', label: 'Telefone' },
+  { id: 'eco', emoji: '🏟️', label: 'Eco de estádio' },
+];
+
+/** Resposta de impulso de uma "sala" para o reverb (ruído decaindo). */
+function impulse(ctx: BaseAudioContext, seconds: number) {
+  const len = Math.round(ctx.sampleRate * seconds);
+  const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    for (let k = 0; k < len; k++) d[k] = (Math.random() * 2 - 1) * (1 - k / len) ** 2.5;
+  }
+  return buf;
+}
+
+/** Lê a gravação (para tocar e aplicar modificadores). */
+export async function decodeBlob(blob: Blob) {
+  const ctx = audioCtx();
+  if (!ctx) throw new Error('sem áudio');
+  return ctx.decodeAudioData(await blob.arrayBuffer());
+}
+
+/**
+ * Aplica os modificadores escolhidos e devolve um WAV mono (22 kHz) com volume controlado.
+ * Ordem: tom (esquilo/monstro) → robô → telefone → estourado → microfone de show → eco.
+ */
+export async function applyModifiers(src: AudioBuffer, mods: SomModifier[]) {
+  const has = (m: SomModifier) => mods.includes(m);
+  const rate = 22_050;
+  const speed = (has('esquilo') ? 1.6 : 1) * (has('monstro') ? 0.65 : 1);
+  const tail = (has('show') ? 1.2 : 0) + (has('eco') ? 1.6 : 0);
+  // No máximo 12s (a gravação mais lenta + eco) para o arquivo não ficar grande demais.
+  const length = Math.min(12, src.duration / speed + tail);
+  const off = new OfflineAudioContext(1, Math.ceil(length * rate), rate);
+  const node = off.createBufferSource();
+  node.buffer = src;
+  node.playbackRate.value = speed;
+  let chain: AudioNode = node;
+  const then = (n: AudioNode) => {
+    chain.connect(n);
+    chain = n;
+    return n;
+  };
+
+  if (has('robo')) {
+    // Modulação em anel: a voz multiplicada por uma onda grave vira voz de robô.
+    const ring = off.createGain();
+    ring.gain.value = 0;
+    const osc = off.createOscillator();
+    osc.frequency.value = 55;
+    osc.connect(ring.gain);
+    osc.start();
+    then(ring);
+    const lift = off.createGain();
+    lift.gain.value = 2.2;
+    then(lift);
+  }
+  if (has('telefone')) {
+    const hp = off.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 450;
+    then(hp);
+    const lp = off.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 3000;
+    then(lp);
+    const crunch = off.createWaveShaper();
+    crunch.curve = curve(2.5);
+    then(crunch);
+  }
+  if (has('estourado')) {
+    const pre = off.createGain();
+    pre.gain.value = 12;
+    then(pre);
+    const shaper = off.createWaveShaper();
+    shaper.curve = curve(7);
+    shaper.oversample = '4x';
+    then(shaper);
+    const bass = off.createBiquadFilter();
+    bass.type = 'lowshelf';
+    bass.frequency.value = 160;
+    bass.gain.value = 9;
+    then(bass);
+    const lp = off.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 5500;
+    then(lp);
+  }
+  if (has('show')) {
+    const comp = off.createDynamicsCompressor();
+    comp.threshold.value = -24;
+    comp.ratio.value = 4;
+    then(comp);
+    const sum = off.createGain();
+    const dry = off.createGain();
+    dry.gain.value = 0.85;
+    const verb = off.createConvolver();
+    verb.buffer = impulse(off, 1.8);
+    const wet = off.createGain();
+    wet.gain.value = 0.45;
+    const delay = off.createDelay(1);
+    delay.delayTime.value = 0.23;
+    const fb = off.createGain();
+    fb.gain.value = 0.28;
+    const dWet = off.createGain();
+    dWet.gain.value = 0.22;
+    chain.connect(dry).connect(sum);
+    chain.connect(verb).connect(wet).connect(sum);
+    chain.connect(delay).connect(dWet).connect(sum);
+    delay.connect(fb).connect(delay);
+    chain = sum;
+  }
+  if (has('eco')) {
+    const sum = off.createGain();
+    const delay = off.createDelay(2);
+    delay.delayTime.value = 0.38;
+    const fb = off.createGain();
+    fb.gain.value = 0.55;
+    const wet = off.createGain();
+    wet.gain.value = 0.7;
+    chain.connect(sum);
+    chain.connect(delay).connect(wet).connect(sum);
+    delay.connect(fb).connect(delay);
+    chain = sum;
+  }
+  chain.connect(off.destination);
+  node.start(0);
+  const out = await off.startRendering();
+  return toWav(out.getChannelData(0), rate);
+}
+
+/** Curva de saturação (quanto maior `k`, mais estourado). */
+function curve(k: number) {
+  const c = new Float32Array(1024);
+  for (let n = 0; n < c.length; n++) {
+    const x = (n / (c.length - 1)) * 2 - 1;
+    c[n] = Math.tanh(x * k) / Math.tanh(k);
+  }
+  return c;
+}
+
+/** Volume controlado (pico ~-1 dB e volume médio até ~-14 dB) e WAV 16 bits. */
+function toWav(d: Float32Array, rate: number) {
+  let peak = 0;
+  let sum = 0;
+  for (const x of d) {
+    peak = Math.max(peak, Math.abs(x));
+    sum += x * x;
+  }
+  const rms = Math.sqrt(sum / Math.max(1, d.length));
+  const gain = peak > 0 ? Math.min(0.89 / peak, rms > 0 ? 0.2 / rms : 1, 8) : 1;
+  return encodeWav(d, rate, gain);
 }
 
 // ---------- enviar um som para a sala ----------
@@ -350,17 +413,7 @@ export async function renderTrim(src: AudioBuffer, start: number, length: number
   node.connect(fade).connect(off.destination);
   node.start(0, start, len);
   const out = await off.startRendering();
-  const d = out.getChannelData(0);
-  let peak = 0;
-  let sum = 0;
-  for (const x of d) {
-    peak = Math.max(peak, Math.abs(x));
-    sum += x * x;
-  }
-  const rms = Math.sqrt(sum / d.length);
-  // Pico até ~-1 dB e volume médio até ~-14 dB: mesmo um áudio "earrape" fica num volume seguro.
-  const gain = peak > 0 ? Math.min(0.89 / peak, rms > 0 ? 0.2 / rms : 1, 8) : 1;
-  return encodeWav(d, rate, gain);
+  return toWav(out.getChannelData(0), rate);
 }
 
 function encodeWav(samples: Float32Array, rate: number, gain: number) {

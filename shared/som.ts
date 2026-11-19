@@ -5,12 +5,13 @@ import type { PublicSpectator } from './types.ts';
  * depois todo mundo ouve as imitações e vota na melhor (não vale votar em si mesmo).
  */
 export const SOM_ROUNDS = [3, 5, 8] as const;
-/** Segundos para ouvir e gravar a imitação. */
-export const SOM_RECORD_TIMES = [15, 20, 30] as const;
 export const SOM_MAX_PLAYERS = [4, 6, 8] as const;
 export const SOM_COUNTDOWN_MS = 3_000;
-/** Duração máxima de cada gravação. */
-export const SOM_MAX_REC_MS = 3_000;
+/**
+ * Gravação: sem tempo correndo — a rodada segue quando todo mundo aperta "Pronto"
+ * (ou quando o dono encerra). Cada gravação tem só um limite de segurança.
+ */
+export const SOM_MAX_REC_MS = 10_000;
 /**
  * Desfile das imitações: aparece uma pessoa por vez (foto e nome em destaque), toca a gravação dela
  * e todo mundo dá a nota — Ruim, Meh ou Bom. Antes, toca o original de novo para relembrar.
@@ -29,11 +30,10 @@ export const SOM_RATINGS: Record<SomRating, { emoji: string; label: string; poin
   bom: { emoji: '🔥', label: 'Bom', points: 2 },
 };
 /** Tamanho máximo de uma gravação enviada (bytes). */
-export const SOM_MAX_CLIP_BYTES = 400_000;
+export const SOM_MAX_CLIP_BYTES = 700_000;
 
 export interface SomSettings {
   rounds: (typeof SOM_ROUNDS)[number];
-  recordTime: (typeof SOM_RECORD_TIMES)[number];
   maxPlayers: (typeof SOM_MAX_PLAYERS)[number];
 }
 

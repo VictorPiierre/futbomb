@@ -1,7 +1,7 @@
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import type { Server } from 'socket.io';
 import {
-  SOM_COUNTDOWN_MS, SOM_MAX_CLIP_BYTES, SOM_MAX_PLAYERS, SOM_RATING_ORDER, SOM_RATINGS, SOM_RECORD_TIMES,
+  SOM_COUNTDOWN_MS, SOM_MAX_CLIP_BYTES, SOM_MAX_PLAYERS, SOM_RATING_ORDER, SOM_RATINGS,
   SOM_ROUNDS, SOM_SLIDE_LEAD_MS, SOM_SLIDE_MIN_MS,
   type SomClip, type SomPhase, type SomPublicRoom, type SomRating, type SomResult, type SomSettings, type SomSound,
 } from '../shared/som.ts';
@@ -46,7 +46,7 @@ export class SomRoom {
   readonly kind = 'som';
   readonly code: string;
   hostId = '';
-  settings: SomSettings = { rounds: 5, recordTime: 20, maxPlayers: 8 };
+  settings: SomSettings = { rounds: 5, maxPlayers: 8 };
   phase: SomPhase = 'lobby';
   members: Member[] = [];
   lastActivity = Date.now();
@@ -173,7 +173,6 @@ export class SomRoom {
     if (by !== this.hostId || this.phase !== 'lobby') return;
     const s = { ...this.settings };
     if (SOM_ROUNDS.includes(patch.rounds as never)) s.rounds = patch.rounds!;
-    if (SOM_RECORD_TIMES.includes(patch.recordTime as never)) s.recordTime = patch.recordTime!;
     if (SOM_MAX_PLAYERS.includes(patch.maxPlayers as never) && patch.maxPlayers! >= this.players.length) s.maxPlayers = patch.maxPlayers!;
     this.settings = s;
     this.broadcast();
@@ -253,10 +252,9 @@ export class SomRoom {
     this.votes.clear();
     for (const m of this.members) m.clip = null;
     this.phase = 'record';
-    const now = Date.now();
-    this.playAt = now + ms(SOM_COUNTDOWN_MS);
-    this.endsAt = this.playAt + ms(this.settings.recordTime * 1000);
-    this.timer = setTimeout(() => this.startVote(), this.endsAt - now);
+    this.playAt = Date.now() + ms(SOM_COUNTDOWN_MS);
+    // Sem tempo para gravar: segue quando todos apertarem "Pronto" (ou o dono encerrar).
+    this.endsAt = null;
     this.broadcast();
   }
 
@@ -414,10 +412,11 @@ export class SomRoom {
     this.broadcast();
   }
 
-  /** Botão "Próximo" do dono: próxima imitação do desfile, ou próxima rodada depois do resultado. */
+  /** Botão do dono: encerra a gravação, passa a imitação do desfile, ou vai para a próxima rodada. */
   next(by: string) {
     if (by !== this.hostId) return;
-    if (this.phase === 'vote') this.nextSlide();
+    if (this.phase === 'record') this.startVote();
+    else if (this.phase === 'vote') this.nextSlide();
     else if (this.phase === 'results') this.advance();
   }
 
