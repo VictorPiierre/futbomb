@@ -1,5 +1,5 @@
 import type { PublicSpectator } from './types.ts';
-import type { SomCategory } from './som-library.ts';
+import type { SomCategory, SomDifficulty } from './som-library.ts';
 
 /**
  * Faz Esse Som!: toca um som curtinho, cada um tenta imitar no microfone,
@@ -24,7 +24,30 @@ export const SOM_WIN_POINTS = 3;
 /** Tamanho máximo de uma gravação enviada (bytes). */
 export const SOM_MAX_CLIP_BYTES = 400_000;
 
+/** Tema da partida: uma categoria, todas misturadas ou só os sons enviados na sala. */
+export type SomTheme = SomCategory | 'mix' | 'sala';
+
+/** Sons que os jogadores enviam pela própria sala (ficam na memória enquanto a sala existir). */
+export const SOM_CUSTOM_MAX = 30;
+export const SOM_CUSTOM_MAX_BYTES = 400_000;
+export const SOM_CUSTOM_TITLE_MAX = 40;
+export interface SomCustomSound {
+  id: string;
+  title: string;
+  emoji: string;
+  cat: SomCategory;
+  diff: SomDifficulty;
+  byId: string;
+  byName: string;
+}
+/** Dificuldade da partida: fixa ou sorteada a cada rodada. */
+export type SomDifficultySetting = SomDifficulty | 'sortear';
+/** Peso do sorteio de dificuldade (a graça está no difícil e no impossível). */
+export const SOM_DIFF_WEIGHTS: Record<SomDifficulty, number> = { facil: 2, dificil: 4, impossivel: 4 };
+
 export interface SomSettings {
+  theme: SomTheme;
+  difficulty: SomDifficultySetting;
   rounds: (typeof SOM_ROUNDS)[number];
   recordTime: (typeof SOM_RECORD_TIMES)[number];
   maxPlayers: (typeof SOM_MAX_PLAYERS)[number];
@@ -48,6 +71,9 @@ export interface SomSound {
   title: string;
   emoji: string;
   cat: SomCategory;
+  diff: SomDifficulty;
+  /** Enviado por alguém da sala (o áudio chega pelo evento som:custom). */
+  custom?: boolean;
 }
 
 /** Resultado da rodada para cada imitação. */
@@ -75,6 +101,8 @@ export interface SomPublicRoom {
   endsAt: number | null;
   /** Votação: quantas imitações existem (as gravações chegam pelo evento som:clips). */
   clipCount: number;
+  /** Sons enviados pelos jogadores nesta sala. */
+  customSounds: SomCustomSound[];
   /** Quando começa a sequência original + imitações na votação. */
   playlistAt: number | null;
   results: SomResult[] | null;

@@ -3,16 +3,17 @@ import {
   SOM_MAX_PLAYERS, SOM_MAX_REC_MS, SOM_RECORD_TIMES, SOM_ROUNDS, SOM_SLOT_MS, SOM_VOTE_POINTS, SOM_WIN_POINTS,
   type SomClip, type SomPublicRoom, type SomSettings,
 } from '../../../shared/som';
-import { SOM_CATEGORIES } from '../../../shared/som-library';
+import { SOM_BLOWN_CATS, SOM_CATEGORIES, SOM_DIFFICULTIES, SOM_KARAOKE_CATS, SOM_LIBRARY, type SomCategory, type SomDifficulty } from '../../../shared/som-library';
 import { emitAck, inviteLink, serverNow, socket, useSocketEvent } from '../net';
 import {
   getMic, loadSound, micSupported, playAudio, prepareClip, startRecording, stopPlayback, useNowPlaying,
-  type ClipAudio, type Recording,
+  type ClipAudio, type MicEffect, type Recording,
 } from '../som-audio';
 import { audioCtx, sfx } from '../sound';
 import { BEST_IMITATION, pick } from '../zoeira';
 import Avatar from './Avatar';
 import { IconCopy, IconCrown, IconLink, SomMark } from './Icons';
+import SomUpload from './SomUpload';
 
 interface Props {
   room: SomPublicRoom;
@@ -126,13 +127,37 @@ export default function SomGame(props: Props) {
   );
 }
 
+function DiffBadge({ diff }: { diff: SomDifficulty }) {
+  const d = SOM_DIFFICULTIES[diff];
+  const cls = diff === 'facil' ? 'border-ok/40 bg-ok/10 text-ok' : diff === 'dificil' ? 'border-fire/40 bg-fire/10 text-fire' : 'border-danger/50 bg-danger/15 text-danger';
+  return (
+    <span className={`rounded-full border px-3 py-0.5 text-xs font-bold ${cls} ${diff === 'impossivel' ? 'animate-pulse' : ''}`}>
+      {d.emoji} {d.label.toUpperCase()}
+    </span>
+  );
+}
+
+/** Efeitos de microfone disponíveis para a categoria do som. */
+function effectsFor(cat: SomCategory): { id: MicEffect; label: string }[] {
+  if (SOM_KARAOKE_CATS.includes(cat)) return [{ id: 'karaoke', label: '🎤 Karaokê (reverb + eco)' }, { id: 'none', label: 'Sem efeito' }];
+  if (SOM_BLOWN_CATS.includes(cat)) return [{ id: 'none', label: 'Normal' }, { id: 'blown', label: '💥 Microfone estourado' }];
+  return [];
+}
+
 function RoundHeader({ room }: { room: SomPublicRoom }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <p className="text-xs font-semibold tracking-[0.2em] text-muted uppercase">
         Rodada {room.round}/{room.settings.rounds}
       </p>
-      {room.sound && <span className="rounded-full border border-sky/40 bg-sky/10 px-3 py-0.5 text-xs font-semibold text-sky">{SOM_CATEGORIES[room.sound.cat]}</span>}
+      {room.sound && (
+        <div className="flex flex-wrap gap-1.5">
+          <span className="rounded-full border border-sky/40 bg-sky/10 px-3 py-0.5 text-xs font-semibold text-sky">
+            {SOM_CATEGORIES[room.sound.cat].emoji} {SOM_CATEGORIES[room.sound.cat].label}
+          </span>
+          <DiffBadge diff={room.sound.diff} />
+        </div>
+      )}
     </div>
   );
 }
@@ -184,6 +209,8 @@ function Record({ room, meId }: Props) {
   const [sent, setSent] = useState(() => mine.round === room.round && mine.recorded);
   const [take, setTake] = useState<ClipAudio | null>(null);
   const [error, setError] = useState('');
+  const effects = effectsFor(sound.cat);
+  const [effect, setEffect] = useState<MicEffect>(effects[0]?.id ?? 'none');
   useSocketEvent<Mine>('som:mine', (p) => p.round === room.round && setSent(p.recorded));
   const recording = !!rec;
   const elapsed = recording ? Math.min(SOM_MAX_REC_MS, Date.now() - recStart) : 0;
@@ -194,7 +221,7 @@ function Record({ room, meId }: Props) {
     setError('');
     if (!micSupported()) return setError('Seu navegador não permite gravar áudio. Tente o Chrome ou o Safari atualizados.');
     try {
-      const r = await startRecording(SOM_MAX_REC_MS, setLevel);
+      const r = await startRecording(SOM_MAX_REC_MS, setLevel, effect);
       setRec(r);
       setRecStart(Date.now());
       const { blob, mime } = await r.done;
@@ -242,6 +269,20 @@ function Record({ room, meId }: Props) {
               <p className="mb-4 text-sm text-muted">
                 {recording ? 'Gravando… capriche! 😂' : sent ? 'Imitação enviada! Se quiser, grave de novo — vale a última.' : `Agora imite o som! Você tem até ${SOM_MAX_REC_MS / 1000}s de gravação.`}
               </p>
+              {effects.length > 0 && (
+                <div className="mb-4 flex flex-wrap justify-center gap-1.5" role="group" aria-label="Efeito do microfone">
+                  {effects.map((e) => (
+                    <button
+                      key={e.id}
+                      disabled={recording || busy}
+                      onClick={() => setEffect(e.id)}
+                      className={`chip px-3 py-1.5 text-sm ${effect === e.id ? 'chip-on' : ''}`}
+                    >
+                      {e.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <button
                 onClick={toggle}
                 disabled={busy}
@@ -613,6 +654,7 @@ function SomLobby({ room, meId, isHost, onCopy }: Props) {
         )}
 
         <MicTest />
+        <SomUpload room={room} meId={meId} isHost={isHost} />
 
         <div className="mt-6 rounded-2xl border border-pop/30 bg-pop/10 p-4">
           <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-pop-soft">
@@ -628,7 +670,7 @@ function SomLobby({ room, meId, isHost, onCopy }: Props) {
 
         <div className="mt-6 rounded-2xl bg-panel/60 p-4 text-sm text-muted">
           <p className="mb-1 font-semibold text-white">Como funciona</p>
-          Toca um som curtinho e esquisito — um bicho, um efeito de videogame, um grito de anime… Todo mundo tenta <b className="text-sky">imitar no microfone</b>{' '}
+          Toca um som curtinho e absurdo — grito estourado, pum bass boosted, drop de phonk, bicho, efeito de videogame… Todo mundo tenta <b className="text-sky">imitar no microfone</b>{' '}
           (dá para ouvir de novo antes de gravar). Depois todos escutam as imitações, sem saber de quem é cada uma, e votam na melhor — não vale votar em si mesmo.
           Cada voto: <b className="text-white">+{SOM_VOTE_POINTS}</b>. Mais votado da rodada: <b className="text-white">+{SOM_WIN_POINTS}</b>. Melhor com 3 ou mais jogadores!
         </div>
@@ -656,12 +698,51 @@ function SomLobby({ room, meId, isHost, onCopy }: Props) {
   );
 }
 
+/** Temas com pelo menos um som, na ordem da biblioteca, com a quantidade. */
+const THEMES = (Object.keys(SOM_CATEGORIES) as SomCategory[])
+  .map((c) => [c, SOM_LIBRARY.filter((x) => x.cat === c).length] as const)
+  .filter(([, n]) => n > 0);
+
 export function SomSettingsPanel({ room, editable }: { room: SomPublicRoom; editable: boolean }) {
   const s = room.settings;
   const set = (patch: Partial<SomSettings>) => editable && socket.emit('room:settings', patch);
   const chip = (on: boolean) => `chip ${on ? 'chip-on' : editable ? '' : 'opacity-60'}`;
   return (
     <div className="space-y-5">
+      <div>
+        <p className="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">Tema</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button disabled={!editable} onClick={() => set({ theme: 'mix' })} className={`${chip(s.theme === 'mix')} col-span-2`}>
+            🌀 Todos os temas misturados
+          </button>
+          {room.customSounds.length > 0 && (
+            <button disabled={!editable} onClick={() => set({ theme: 'sala' })} className={`${chip(s.theme === 'sala')} col-span-2`}>
+              📁 Só os sons da sala <span className="text-muted">({room.customSounds.length})</span>
+            </button>
+          )}
+          {THEMES.map(([cat, count]) => (
+            <button key={cat} disabled={!editable} onClick={() => set({ theme: cat })} className={`${chip(s.theme === cat)} text-sm`}>
+              {SOM_CATEGORIES[cat].emoji} {SOM_CATEGORIES[cat].label} <span className="text-muted">({count})</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <p className="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">Dificuldade</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button disabled={!editable} onClick={() => set({ difficulty: 'sortear' })} className={`${chip(s.difficulty === 'sortear')} col-span-2`}>
+            🎲 Sortear a cada rodada
+          </button>
+          {(Object.keys(SOM_DIFFICULTIES) as SomDifficulty[]).map((d) => (
+            <button key={d} disabled={!editable} onClick={() => set({ difficulty: d })} className={`${chip(s.difficulty === d)} text-sm ${d === 'impossivel' ? 'col-span-2' : ''}`} title={SOM_DIFFICULTIES[d].hint}>
+              {SOM_DIFFICULTIES[d].emoji} {SOM_DIFFICULTIES[d].label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1.5 text-[11px] text-muted">
+          {s.difficulty === 'sortear' ? 'Cada rodada sorteia uma dificuldade (mais chance de difícil e impossível).' : SOM_DIFFICULTIES[s.difficulty].hint}
+        </p>
+      </div>
       <Row label="Rodadas">
         {SOM_ROUNDS.map((n) => (
           <button key={n} disabled={!editable} onClick={() => set({ rounds: n })} className={`${chip(s.rounds === n)} flex-1`}>

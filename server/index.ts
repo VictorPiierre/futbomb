@@ -263,6 +263,14 @@ io.on('connection', (socket) => {
     const { room, memberId } = current(socket);
     ack?.(room instanceof SomRoom ? room.vote(memberId, slot) : { ok: false, error: 'Sala não encontrada.' });
   });
+  socket.on('som:add-sound', (meta: Record<string, unknown>, data: unknown, ack?: (r: unknown) => void) => {
+    const { room, memberId } = current(socket);
+    ack?.(room instanceof SomRoom ? room.addCustom(memberId, meta ?? {}, data) : { ok: false, error: 'Sala não encontrada.' });
+  });
+  socket.on('som:remove-sound', (id: string) => {
+    const { room, memberId } = current(socket);
+    if (room instanceof SomRoom) room.removeCustom(memberId, id);
+  });
   socket.on('som:next', () => {
     const { room, memberId } = current(socket);
     if (room instanceof SomRoom) room.next(memberId);
