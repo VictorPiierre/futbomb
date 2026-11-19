@@ -12,7 +12,7 @@
  *   GITHUB_REPO    opcional, padrão VictorPiierre/futbomb
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { SOM_CATEGORIES, SOM_DIFFICULTIES, SOM_EXTRA, SOM_LIBRARY, type SomCategory, type SomDifficulty, type SomEntry } from '../shared/som-library.ts';
+import { SOM_EXTRA, SOM_LIBRARY, type SomEntry } from '../shared/som-library.ts';
 
 const REPO = process.env.GITHUB_REPO || 'VictorPiierre/futbomb';
 const BRANCH = process.env.GITHUB_BRANCH || 'main';
@@ -125,7 +125,7 @@ function slug(text: string) {
     .slice(0, 24) || 'som';
 }
 
-export async function addSound(meta: { title?: unknown; emoji?: unknown; cat?: unknown; diff?: unknown }, data: unknown): Promise<{ ok: boolean; error?: string; sound?: SomEntry }> {
+export async function addSound(meta: { title?: unknown; emoji?: unknown }, data: unknown): Promise<{ ok: boolean; error?: string; sound?: SomEntry }> {
   const buf = Buffer.isBuffer(data) ? data : data instanceof ArrayBuffer ? Buffer.from(data) : ArrayBuffer.isView(data) ? Buffer.from(data.buffer, data.byteOffset, data.byteLength) : null;
   if (!buf || buf.length < 500) return { ok: false, error: 'Áudio vazio.' };
   if (buf.length > ADMIN_MAX_BYTES) return { ok: false, error: 'Áudio grande demais.' };
@@ -134,12 +134,8 @@ export async function addSound(meta: { title?: unknown; emoji?: unknown; cat?: u
   const title = String(meta?.title ?? '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, TITLE_MAX);
   if (!title) return { ok: false, error: 'Dê um nome para o som.' };
   const emoji = [...String(meta?.emoji ?? '')].slice(0, 2).join('') || '🔊';
-  const cat = String(meta?.cat) as SomCategory;
-  const diff = String(meta?.diff) as SomDifficulty;
-  if (!(cat in SOM_CATEGORIES)) return { ok: false, error: 'Tema inválido.' };
-  if (!(diff in SOM_DIFFICULTIES)) return { ok: false, error: 'Dificuldade inválida.' };
   const id = `${slug(title)}-${randomBytes(2).toString('hex')}`;
-  const sound: SomEntry = { id, title, emoji, cat, diff, file: `${id}.wav` };
+  const sound: SomEntry = { id, title, emoji, file: `${id}.wav` };
   try {
     const list = await serial(() =>
       commit(`Add sound "${title}" via /admin [skip render]`, (current) => ({

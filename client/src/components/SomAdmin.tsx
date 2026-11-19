@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { SOM_CATEGORIES, SOM_DIFFICULTIES, type SomCategory, type SomDifficulty, type SomEntry } from '../../../shared/som-library';
+import type { SomEntry } from '../../../shared/som-library';
 import { emitAck, socket } from '../net';
 import { decodeFile, loadSound, playAudio, renderTrim, useNowPlaying } from '../som-audio';
 import { sfx } from '../sound';
@@ -123,8 +123,6 @@ function Upload({ adminKey, onSaved }: { adminKey: string; onSaved: (s: SomEntry
   const [length, setLength] = useState(1.2);
   const [title, setTitle] = useState('');
   const [emoji, setEmoji] = useState('🔊');
-  const [cat, setCat] = useState<SomCategory>('meme');
-  const [diff, setDiff] = useState<SomDifficulty>('dificil');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [ok, setOk] = useState('');
@@ -163,7 +161,7 @@ function Upload({ adminKey, onSaved }: { adminKey: string; onSaved: (s: SomEntry
     setError('');
     setOk('');
     const wav = await renderTrim(buffer, start, length);
-    const res = await emitAck<Res>('admin:som-add', adminKey, { title, emoji, cat, diff }, wav);
+    const res = await emitAck<Res>('admin:som-add', adminKey, { title, emoji }, wav);
     setBusy(false);
     if (res.sounds) onSaved(res.sounds);
     if (!res.ok) {
@@ -237,28 +235,6 @@ function Upload({ adminKey, onSaved }: { adminKey: string; onSaved: (s: SomEntry
               ))}
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block">
-              <span className={label}>Tema</span>
-              <select value={cat} onChange={(e) => setCat(e.target.value as SomCategory)} className="w-full rounded-xl border border-line bg-panel-2 px-3 py-2.5">
-                {(Object.keys(SOM_CATEGORIES) as SomCategory[]).map((c) => (
-                  <option key={c} value={c}>
-                    {SOM_CATEGORIES[c].emoji} {SOM_CATEGORIES[c].label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className={label}>Dificuldade</span>
-              <select value={diff} onChange={(e) => setDiff(e.target.value as SomDifficulty)} className="w-full rounded-xl border border-line bg-panel-2 px-3 py-2.5">
-                {(Object.keys(SOM_DIFFICULTIES) as SomDifficulty[]).map((d) => (
-                  <option key={d} value={d}>
-                    {SOM_DIFFICULTIES[d].emoji} {SOM_DIFFICULTIES[d].label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
           <button onClick={() => void save()} disabled={busy || !title.trim()} className="btn-primary w-full py-3 text-lg">
             {busy ? 'Salvando no jogo…' : '💾 Salvar no jogo'}
           </button>
@@ -299,9 +275,7 @@ function SavedList({ adminKey, sounds, onChange }: { adminKey: string; sounds: S
               <span className="text-xl">{s.emoji}</span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-semibold">{s.title}</span>
-                <span className="block truncate text-xs text-muted">
-                  {SOM_CATEGORIES[s.cat].label} · {SOM_DIFFICULTIES[s.diff].emoji} {SOM_DIFFICULTIES[s.diff].label}
-                </span>
+                <span className="block truncate text-xs text-muted">{s.file}</span>
               </span>
               <button disabled={busy === s.id} onClick={() => void remove(s)} className="cursor-pointer px-1 text-muted hover:text-danger disabled:opacity-50" aria-label={`Apagar ${s.title}`} title="Apagar">
                 {busy === s.id ? '…' : '🗑️'}

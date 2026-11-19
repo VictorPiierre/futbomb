@@ -5,8 +5,7 @@ import {
   SOM_VOTE_EXTRA_MS, SOM_VOTE_POINTS, SOM_WIN_POINTS,
   type SomClip, type SomPhase, type SomPublicRoom, type SomResult, type SomSettings, type SomSound,
 } from '../shared/som.ts';
-import { SOM_DIFFICULTIES, SOM_LIBRARY, type SomCategory, type SomDifficulty } from '../shared/som-library.ts';
-import { SOM_DIFF_WEIGHTS } from '../shared/som.ts';
+import { SOM_LIBRARY } from '../shared/som-library.ts';
 
 const MAX_MEMBERS = 16;
 const GRACE_LOBBY_MS = 20_000;
@@ -16,9 +15,7 @@ const ALL_IN_DELAY_MS = 800;
 const PACE = Number(process.env.SOM_PACE) || 1;
 // Testes automáticos: sons de mentira para dar para jogar sem nenhum som cadastrado (ex.: SOM_TEST_SOUNDS=1).
 if (process.env.SOM_TEST_SOUNDS && !SOM_LIBRARY.length) {
-  const cats = ['meme', 'phonk', 'bicho', 'efeito'] as const;
-  const diffs = ['facil', 'dificil', 'impossivel'] as const;
-  cats.forEach((cat) => diffs.forEach((diff) => SOM_LIBRARY.push({ id: `teste-${cat}-${diff}`, title: `Teste ${cat} ${diff}`, emoji: '🧪', cat, diff, file: 'teste.wav' })));
+  for (let i = 1; i <= 6; i++) SOM_LIBRARY.push({ id: `teste-${i}`, title: `Som de teste ${i}`, emoji: '🧪', file: 'teste.wav' });
 }
 const ms = (n: number) => Math.round(n * PACE);
 
@@ -51,7 +48,7 @@ export class SomRoom {
   readonly kind = 'som';
   readonly code: string;
   hostId = '';
-  settings: SomSettings = { theme: 'mix', difficulty: 'sortear', rounds: 5, recordTime: 20, maxPlayers: 8 };
+  settings: SomSettings = { rounds: 5, recordTime: 20, maxPlayers: 8 };
   phase: SomPhase = 'lobby';
   members: Member[] = [];
   lastActivity = Date.now();
@@ -172,8 +169,6 @@ export class SomRoom {
   updateSettings(by: string, patch: Partial<SomSettings>) {
     if (by !== this.hostId || this.phase !== 'lobby') return;
     const s = { ...this.settings };
-    if (patch.theme === 'mix' || (typeof patch.theme === 'string' && SOM_LIBRARY.some((x) => x.cat === patch.theme))) s.theme = patch.theme;
-    if (patch.difficulty === 'sortear' || (typeof patch.difficulty === 'string' && patch.difficulty in SOM_DIFFICULTIES)) s.difficulty = patch.difficulty;
     if (SOM_ROUNDS.includes(patch.rounds as never)) s.rounds = patch.rounds!;
     if (SOM_RECORD_TIMES.includes(patch.recordTime as never)) s.recordTime = patch.recordTime!;
     if (SOM_MAX_PLAYERS.includes(patch.maxPlayers as never) && patch.maxPlayers! >= this.players.length) s.maxPlayers = patch.maxPlayers!;
@@ -232,37 +227,18 @@ export class SomRoom {
     this.winnerId = null;
   }
 
-  /**
-   * Sorteia um som ainda não usado do tema escolhido, na dificuldade escolhida (ou sorteada).
-   * Se faltar som naquela dificuldade, usa qualquer dificuldade do tema. No "misturado", evita repetir a categoria seguida.
-   */
+  /** Sorteia um som ainda não usado na partida (quando acabam, recomeça a lista). */
   private pickSound(): SomSound {
-    const theme = this.settings.theme;
-    // A biblioteca inclui os sons que o dono do site salvou pela página /admin.
-    const lib = SOM_LIBRARY;
-    const inTheme = lib.filter((s) => theme === 'mix' || s.cat === theme);
-    const all = inTheme.length ? inTheme : lib;
-    let free = all.filter((s) => !this.used.has(s.id));
+    let free = SOM_LIBRARY.filter((s) => !this.used.has(s.id));
     if (!free.length) {
-      for (const s of all) this.used.delete(s.id);
-      free = all;
+      this.used.clear();
+      free = SOM_LIBRARY;
     }
-    let diff: SomDifficulty;
-    if (this.settings.difficulty === 'sortear') {
-      const available = (Object.keys(SOM_DIFF_WEIGHTS) as SomDifficulty[]).filter((d) => free.some((s) => s.diff === d));
-      const total = available.reduce((n, d) => n + SOM_DIFF_WEIGHTS[d], 0);
-      let r = randomInt(Math.max(1, total));
-      diff = available.find((d) => (r -= SOM_DIFF_WEIGHTS[d]) < 0) ?? 'dificil';
-    } else diff = this.settings.difficulty;
-    const ofDiff = free.filter((s) => s.diff === diff);
-    let pool = ofDiff.length ? ofDiff : free;
-    if (theme === 'mix') {
-      const other = pool.filter((s) => s.cat !== this.sound?.cat);
-      if (other.length) pool = other;
-    }
+    // Evita repetir o mesmo som duas rodadas seguidas quando a lista recomeça.
+    const pool = free.length > 1 ? free.filter((s) => s.id !== this.sound?.id) : free;
     const s = pool[randomInt(pool.length)];
     this.used.add(s.id);
-    return { id: s.id, title: s.title, emoji: s.emoji, cat: s.cat, diff: s.diff, ...(s.file ? { file: s.file } : {}) };
+    return { id: s.id, title: s.title, emoji: s.emoji, ...(s.file ? { file: s.file } : {}) };
   }
 
   private nextRound() {
@@ -463,7 +439,7 @@ export class SomRoom {
       playAt: this.phase === 'record' ? this.playAt : null,
       endsAt: this.endsAt,
       clipCount: this.slots.length,
-      library: SOM_LIBRARY.reduce<Partial<Record<SomCategory, number>>>((acc, s) => ({ ...acc, [s.cat]: (acc[s.cat] ?? 0) + 1 }), {}),
+      soundCount: SOM_LIBRARY.length,
       playlistAt: this.phase === 'vote' ? this.playlistAt : null,
       results: this.phase === 'results' ? this.results : null,
       gained: this.phase === 'results' ? this.gained : null,

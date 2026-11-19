@@ -83,18 +83,18 @@ const extra = () => JSON.parse(Buffer.from(tree().get('data/som-extra.json')!, '
 check(checkKey('senha-de-teste') && !checkKey('outra') && !checkKey(''), 'só a senha certa entra');
 const base = SOM_LIBRARY.length;
 
-const bad = await addSound({ title: 'x', emoji: '🔊', cat: 'meme', diff: 'facil' }, Buffer.alloc(3000, 1));
+const bad = await addSound({ title: 'x', emoji: '🔊' }, Buffer.alloc(3000, 1));
 check(!bad.ok, 'arquivo que não é o WAV da página é recusado');
 
 raceOnce = true;
-const r = await addSound({ title: 'Grito do Primo!', emoji: '😱', cat: 'meme', diff: 'impossivel' }, wav(20000));
+const r = await addSound({ title: 'Grito do Primo!', emoji: '😱' }, wav(20000));
 check(r.ok && r.sound!.id.startsWith('grito-do-primo-') && r.sound!.file === `${r.sound!.id}.wav`, `som salvo com id ${r.sound?.id}`);
 check(tree().has(`client/public/som/${r.sound!.id}.wav`), 'o arquivo .wav foi para o repositório');
 check(extra().length === 1 && extra()[0].title === 'Grito do Primo!', 'data/som-extra.json atualizado no mesmo commit');
 check(messages.length === 1 && messages[0].includes('[skip render]'), 'commit com [skip render] (o servidor não reinicia); conflito resolvido tentando de novo');
 check(SOM_LIBRARY.length === base + 1 && SOM_LIBRARY.some((s) => s.id === r.sound!.id), 'o servidor já sorteia o som novo na hora');
 
-const r2 = await addSound({ title: 'Drop do phonk', emoji: '🏎️', cat: 'phonk', diff: 'impossivel' }, wav(10000));
+const r2 = await addSound({ title: 'Drop do phonk', emoji: '🏎️' }, wav(10000));
 check(r2.ok && extra().length === 2 && listSounds().length === 2, 'segundo som salvo');
 
 const del = await removeSound(r.sound!.id);
@@ -102,7 +102,7 @@ check(del.ok && !tree().has(`client/public/som/${r.sound!.id}.wav`) && extra().l
 check(SOM_LIBRARY.length === base + 1 && !SOM_LIBRARY.some((s) => s.id === r.sound!.id), 'e some do sorteio na hora');
 
 globalThis.fetch = (async () => new Response('{"message":"Bad credentials"}', { status: 401 })) as typeof fetch;
-const fail = await addSound({ title: 'Sem token', emoji: '🔊', cat: 'meme', diff: 'facil' }, wav(10000));
+const fail = await addSound({ title: 'Sem token', emoji: '🔊' }, wav(10000));
 check(!fail.ok && /GITHUB_TOKEN/.test(fail.error!), 'token errado: avisa sem quebrar nada');
 check(SOM_LIBRARY.length === base + 1, 'e não mexe na biblioteca');
 

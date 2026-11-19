@@ -1,5 +1,4 @@
 import type { PublicSpectator } from './types.ts';
-import type { SomCategory, SomDifficulty } from './som-library.ts';
 
 /**
  * Faz Esse Som!: toca um som curtinho, cada um tenta imitar no microfone,
@@ -24,16 +23,7 @@ export const SOM_WIN_POINTS = 3;
 /** Tamanho máximo de uma gravação enviada (bytes). */
 export const SOM_MAX_CLIP_BYTES = 400_000;
 
-/** Tema da partida: uma categoria ou todas misturadas. */
-export type SomTheme = SomCategory | 'mix';
-/** Dificuldade da partida: fixa ou sorteada a cada rodada. */
-export type SomDifficultySetting = SomDifficulty | 'sortear';
-/** Peso do sorteio de dificuldade (a graça está no difícil e no impossível). */
-export const SOM_DIFF_WEIGHTS: Record<SomDifficulty, number> = { facil: 2, dificil: 4, impossivel: 4 };
-
 export interface SomSettings {
-  theme: SomTheme;
-  difficulty: SomDifficultySetting;
   rounds: (typeof SOM_ROUNDS)[number];
   recordTime: (typeof SOM_RECORD_TIMES)[number];
   maxPlayers: (typeof SOM_MAX_PLAYERS)[number];
@@ -56,8 +46,6 @@ export interface SomSound {
   id: string;
   title: string;
   emoji: string;
-  cat: SomCategory;
-  diff: SomDifficulty;
   /** Arquivo em client/public/som (padrão: <id>.mp3). */
   file?: string;
 }
@@ -87,8 +75,8 @@ export interface SomPublicRoom {
   endsAt: number | null;
   /** Votação: quantas imitações existem (as gravações chegam pelo evento som:clips). */
   clipCount: number;
-  /** Quantos sons existem agora no jogo, por tema (inclui os salvos há pouco pelo /admin). */
-  library: Partial<Record<SomCategory, number>>;
+  /** Quantos sons existem agora no jogo (inclui os salvos há pouco pelo /admin). */
+  soundCount: number;
   /** Quando começa a sequência original + imitações na votação. */
   playlistAt: number | null;
   results: SomResult[] | null;

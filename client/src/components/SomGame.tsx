@@ -3,7 +3,6 @@ import {
   SOM_MAX_PLAYERS, SOM_MAX_REC_MS, SOM_RECORD_TIMES, SOM_ROUNDS, SOM_SLOT_MS, SOM_VOTE_POINTS, SOM_WIN_POINTS,
   type SomClip, type SomPublicRoom, type SomSettings,
 } from '../../../shared/som';
-import { SOM_BLOWN_CATS, SOM_CATEGORIES, SOM_DIFFICULTIES, SOM_KARAOKE_CATS, SOM_LIBRARY, type SomCategory, type SomDifficulty } from '../../../shared/som-library';
 import { emitAck, inviteLink, serverNow, socket, useSocketEvent } from '../net';
 import {
   getMic, loadSound, micSupported, playAudio, prepareClip, startRecording, stopPlayback, useNowPlaying,
@@ -126,22 +125,12 @@ export default function SomGame(props: Props) {
   );
 }
 
-function DiffBadge({ diff }: { diff: SomDifficulty }) {
-  const d = SOM_DIFFICULTIES[diff];
-  const cls = diff === 'facil' ? 'border-ok/40 bg-ok/10 text-ok' : diff === 'dificil' ? 'border-fire/40 bg-fire/10 text-fire' : 'border-danger/50 bg-danger/15 text-danger';
-  return (
-    <span className={`rounded-full border px-3 py-0.5 text-xs font-bold ${cls} ${diff === 'impossivel' ? 'animate-pulse' : ''}`}>
-      {d.emoji} {d.label.toUpperCase()}
-    </span>
-  );
-}
-
-/** Efeitos de microfone disponíveis para a categoria do som. */
-function effectsFor(cat: SomCategory): { id: MicEffect; label: string }[] {
-  if (SOM_KARAOKE_CATS.includes(cat)) return [{ id: 'karaoke', label: '🎤 Karaokê (reverb + eco)' }, { id: 'none', label: 'Sem efeito' }];
-  if (SOM_BLOWN_CATS.includes(cat)) return [{ id: 'none', label: 'Normal' }, { id: 'blown', label: '💥 Microfone estourado' }];
-  return [];
-}
+/** Efeitos de microfone (a gravação enviada já vai com o efeito). */
+const EFFECTS: { id: MicEffect; label: string }[] = [
+  { id: 'none', label: 'Normal' },
+  { id: 'karaoke', label: '🎤 Karaokê' },
+  { id: 'blown', label: '💥 Estourado' },
+];
 
 function RoundHeader({ room }: { room: SomPublicRoom }) {
   return (
@@ -149,14 +138,6 @@ function RoundHeader({ room }: { room: SomPublicRoom }) {
       <p className="text-xs font-semibold tracking-[0.2em] text-muted uppercase">
         Rodada {room.round}/{room.settings.rounds}
       </p>
-      {room.sound && (
-        <div className="flex flex-wrap gap-1.5">
-          <span className="rounded-full border border-sky/40 bg-sky/10 px-3 py-0.5 text-xs font-semibold text-sky">
-            {SOM_CATEGORIES[room.sound.cat].emoji} {SOM_CATEGORIES[room.sound.cat].label}
-          </span>
-          <DiffBadge diff={room.sound.diff} />
-        </div>
-      )}
     </div>
   );
 }
@@ -208,8 +189,8 @@ function Record({ room, meId }: Props) {
   const [sent, setSent] = useState(() => mine.round === room.round && mine.recorded);
   const [take, setTake] = useState<ClipAudio | null>(null);
   const [error, setError] = useState('');
-  const effects = effectsFor(sound.cat);
-  const [effect, setEffect] = useState<MicEffect>(effects[0]?.id ?? 'none');
+  const effects = EFFECTS;
+  const [effect, setEffect] = useState<MicEffect>('none');
   useSocketEvent<Mine>('som:mine', (p) => p.round === room.round && setSent(p.recorded));
   const recording = !!rec;
   const elapsed = recording ? Math.min(SOM_MAX_REC_MS, Date.now() - recStart) : 0;
@@ -614,7 +595,7 @@ function SomLobby({ room, meId, isHost, onCopy }: Props) {
   const ready = room.players.filter((p) => p.connected).length;
   const amSpectator = room.spectators.some((s) => s.id === meId);
   const seatFree = room.players.length < room.settings.maxPlayers;
-  const empty = Object.values(room.library).every((n) => !n);
+  const empty = room.soundCount === 0;
 
   async function start() {
     const res = await emitAck<{ ok: boolean; error?: string }>('game:start');
@@ -705,41 +686,13 @@ function SomLobby({ room, meId, isHost, onCopy }: Props) {
 
 export function SomSettingsPanel({ room, editable }: { room: SomPublicRoom; editable: boolean }) {
   const s = room.settings;
-  // Temas com pelo menos um som (contagem ao vivo do servidor).
-  const THEMES = (Object.keys(SOM_CATEGORIES) as SomCategory[]).map((c) => [c, room.library[c] ?? 0] as const).filter(([, n]) => n > 0);
   const set = (patch: Partial<SomSettings>) => editable && socket.emit('room:settings', patch);
   const chip = (on: boolean) => `chip ${on ? 'chip-on' : editable ? '' : 'opacity-60'}`;
   return (
     <div className="space-y-5">
-      <div>
-        <p className="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">Tema</p>
-        <div className="grid grid-cols-2 gap-2">
-          <button disabled={!editable} onClick={() => set({ theme: 'mix' })} className={`${chip(s.theme === 'mix')} col-span-2`}>
-            🌀 Todos os temas misturados
-          </button>
-          {THEMES.map(([cat, count]) => (
-            <button key={cat} disabled={!editable} onClick={() => set({ theme: cat })} className={`${chip(s.theme === cat)} text-sm`}>
-              {SOM_CATEGORIES[cat].emoji} {SOM_CATEGORIES[cat].label} <span className="text-muted">({count})</span>
-            </button>
-          ))}
-        </div>
-      </div>
-      <div>
-        <p className="mb-2 text-xs font-semibold tracking-wider text-muted uppercase">Dificuldade</p>
-        <div className="grid grid-cols-2 gap-2">
-          <button disabled={!editable} onClick={() => set({ difficulty: 'sortear' })} className={`${chip(s.difficulty === 'sortear')} col-span-2`}>
-            🎲 Sortear a cada rodada
-          </button>
-          {(Object.keys(SOM_DIFFICULTIES) as SomDifficulty[]).map((d) => (
-            <button key={d} disabled={!editable} onClick={() => set({ difficulty: d })} className={`${chip(s.difficulty === d)} text-sm ${d === 'impossivel' ? 'col-span-2' : ''}`} title={SOM_DIFFICULTIES[d].hint}>
-              {SOM_DIFFICULTIES[d].emoji} {SOM_DIFFICULTIES[d].label}
-            </button>
-          ))}
-        </div>
-        <p className="mt-1.5 text-[11px] text-muted">
-          {s.difficulty === 'sortear' ? 'Cada rodada sorteia uma dificuldade (mais chance de difícil e impossível).' : SOM_DIFFICULTIES[s.difficulty].hint}
-        </p>
-      </div>
+      <p className="rounded-xl bg-panel-2 px-3 py-2 text-sm">
+        🔊 <b>{room.soundCount}</b> {room.soundCount === 1 ? 'som no jogo' : 'sons no jogo'}
+      </p>
       <Row label="Rodadas">
         {SOM_ROUNDS.map((n) => (
           <button key={n} disabled={!editable} onClick={() => set({ rounds: n })} className={`${chip(s.rounds === n)} flex-1`}>

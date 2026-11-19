@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import { io, type Socket } from 'socket.io-client';
 import type { SomClip, SomPublicRoom } from '../shared/som.ts';
-import { SOM_CATEGORIES, SOM_DIFFICULTIES, SOM_LIBRARY } from '../shared/som-library.ts';
+import { SOM_LIBRARY } from '../shared/som-library.ts';
 import type { JoinResult } from '../shared/types.ts';
 
 const URL = process.env.URL ?? 'http://localhost:3000';
@@ -27,7 +27,6 @@ async function waitFor(fn: () => boolean, ms = 30_000) {
 check(new Set(SOM_LIBRARY.map((x) => x.id)).size === SOM_LIBRARY.length, `ids sem repetição (${SOM_LIBRARY.length} sons do dono)`);
 const missing = SOM_LIBRARY.filter((x) => !fs.existsSync(`client/public/som/${x.file ?? `${x.id}.mp3`}`));
 check(!missing.length, `todo som tem arquivo ${missing.map((x) => x.id).join(', ')}`);
-check(SOM_LIBRARY.every((x) => x.cat in SOM_CATEGORIES && x.diff in SOM_DIFFICULTIES), 'todo som tem tema e dificuldade válidos');
 
 class Client {
   socket: Socket;
@@ -52,11 +51,9 @@ b.id = (await b.emit<JoinResult>('room:join', { code: r.code, name: 'Beto' })).m
 c.id = (await c.emit<JoinResult>('room:join', { code: r.code, name: 'Caio' })).memberId!;
 await waitFor(() => a.state?.players.length === 3);
 check(a.state?.kind === 'som', 'sala do Faz Esse Som! criada com 3 jogadores');
-a.socket.emit('room:settings', { theme: 'xyz', difficulty: 'mole' });
-await sleep(200);
-check(a.state!.settings.theme === 'mix' && a.state!.settings.difficulty === 'sortear', 'padrão: todos os temas misturados e dificuldade sorteada; valores inválidos ignorados');
-a.socket.emit('room:settings', { rounds: 3, theme: 'meme', difficulty: 'impossivel' });
-await waitFor(() => a.state?.settings.rounds === 3 && a.state.settings.theme === 'meme');
+check(a.state!.soundCount === 6 && !('theme' in a.state!.settings), 'sem temas nem dificuldades: uma lista só (6 sons de teste)');
+a.socket.emit('room:settings', { rounds: 3 });
+await waitFor(() => a.state?.settings.rounds === 3);
 
 await a.emit('game:start');
 const seen = new Set<string>();
@@ -65,8 +62,7 @@ for (let round = 1; round <= 3; round++) {
   const s = a.state!;
   seen.add(s.sound!.id);
   check(!!s.sound && !!s.playAt, `rodada ${round}: som "${s.sound!.title}"`);
-  // Só há 1 som de teste por dificuldade: depois do primeiro, cai para outra dificuldade do mesmo tema.
-  check(s.sound!.cat === 'meme' && (round > 1 || s.sound!.diff === 'impossivel'), `tema e dificuldade respeitados (${s.sound!.cat}, ${s.sound!.diff})`);
+  check(!('cat' in s.sound!) && !('diff' in s.sound!), 'o som não tem tema nem dificuldade');
 
   if (round === 3) {
     // Ninguém grava: vai direto para o resultado vazio.
